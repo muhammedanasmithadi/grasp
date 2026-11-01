@@ -1,0 +1,268 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: 'IM Fell DW Pica', Georgia, serif;
+    background: #f3efe1;
+    color: #2c2418;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #e8ddc9;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #b8860b;
+    border: 2px solid #f3efe1;
+  }
+
+  h1, h2, h3, .display {
+    font-family: 'Cinzel', Georgia, serif;
+    letter-spacing: 0.04em;
+  }
+}
+
+@layer components {
+  .craft-panel {
+    background: #fdfaf0;
+    border: 2px solid #c9ba9e;
+    border-radius: 0;
+    box-shadow: 0 4px 0 #000, 0 8px 0 rgba(0,0,0,0.15), 0 12px 24px rgba(0,0,0,0.25);
+    position: relative;
+  }
+
+  .craft-panel::before {
+    content: '';
+    position: absolute;
+    top: -2px; left: -2px; right: -2px; bottom: -2px;
+    border: 1px solid #fff;
+    pointer-events: none;
+    border-radius: 0;
+  }
+
+  .craft-panel:hover {
+    border-color: #b8860b;
+    box-shadow: 0 6px 0 #000, 0 12px 0 rgba(0,0,0,0.15), 0 18px 36px rgba(0,0,0,0.3);
+    transform: translateY(-2px);
+  }
+
+  .btn-brass {
+    background: linear-gradient(135deg, #b8860b 0%, #a67200 100%);
+    border: 1px solid #8a6200;
+    color: #f3efe1;
+    border-radius: 0;
+    padding: 0 28px;
+    height: 48px;
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #5c4a00, 0 6px 12px rgba(0,0,0,0.3);
+    transition: all 0.15s ease;
+  }
+
+  .btn-brass:hover {
+    background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
+    border-color: #a67200;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 0 #5c4a00, 0 10px 20px rgba(0,0,0,0.4);
+  }
+
+  .btn-brass:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #5c4a00;
+  }
+
+  .btn-text {
+    background: transparent;
+    border: 1px solid #c9ba9e;
+    color: #2c2418;
+    border-radius: 0;
+    padding: 0 28px;
+    height: 48px;
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-text:hover {
+    border-color: #b8860b;
+    color: #b8860b;
+    background: rgba(184, 134, 11, 0.05);
+  }
+
+  .input-type {
+    background: #fdfaf0;
+    border: 1px solid #c9ba9e;
+    border-radius: 0;
+    padding: 0 20px;
+    color: #2c2418;
+    font-family: 'IM Fell DW Pica', Georgia, serif;
+    font-size: 1.1rem;
+  }
+
+  .input-type:focus {
+    outline: none;
+    border-color: #b8860b;
+    box-shadow: 0 0 0 2px rgba(184, 134, 11, 0.2);
+  }
+
+  .mech-part {
+    background: #2c2418;
+    border: 2px solid #5c4a00;
+    border-radius: 0;
+    box-shadow: 0 4px 0 #000;
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .mech-part:hover {
+    border-color: #b8860b;
+    box-shadow: 0 6px 0 #b8860b, 0 8px 16px rgba(0,0,0,0.4);
+    transform: translateY(-3px);
+  }
+
+  .mech-part.active {
+    border-color: #cd7f32;
+    box-shadow: 0 6px 0 #cd7f32;
+    background: #3a301f;
+  }
+
+  .mech-part.sabotage {
+    border-color: #a04000;
+    animation: fault-pulse 2.5s infinite;
+  }
+
+  @keyframes fault-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(160, 64, 0, 0.4); }
+    50% { box-shadow: 0 0 0 12px rgba(160, 64, 0, 0.15); }
+  }
+
+  .mech-label {
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #b8860b;
+  }
+
+  .spine-node {
+    background: #fdfaf0;
+    border: 2px solid #c9ba9e;
+    border-radius: 0;
+    transition: all 0.2s ease;
+  }
+
+  .spine-node.active {
+    border-color: #b8860b;
+    background: #fdf6e7;
+    box-shadow: 0 3px 0 #000;
+  }
+
+  .spine-node.sabotage {
+    border-color: #a04000;
+    background: #fdeee2;
+  }
+
+  .range-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #c9ba9e;
+    border: none;
+    border-radius: 0;
+    outline: none;
+  }
+
+  .range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #b8860b;
+    border: 2px solid #2c2418;
+    border-radius: 0;
+    cursor: pointer;
+    box-shadow: 0 2px 0 #000;
+  }
+
+  .rule-vertical {
+    width: 2px;
+    background: #c9ba9e;
+  }
+
+  .rule-fill {
+    width: 100%;
+    background: #b8860b;
+  }
+
+  .beat-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 2px solid #b8860b;
+    color: #b8860b;
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: 900;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    box-shadow: 0 3px 0 #000;
+  }
+
+  .drop-cap {
+    font-family: 'Cinzel', Georgia, serif;
+    font-weight: 900;
+    font-size: 3rem;
+    color: #b8860b;
+    float: left;
+    margin: 0 12px 8px 0;
+    line-height: 1;
+  }
+
+  .marginalia {
+    font-family: 'IM Fell DW Pica', Georgia, serif;
+    font-style: italic;
+    font-size: 0.85rem;
+    color: #6b5e4a;
+    border-left: 3px solid #c9ba9e;
+    padding-left: 12px;
+    margin-top: 8px;
+  }
+
+  .fade-in {
+    animation: fade-in 0.6s cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .paper-grain {
+    position: absolute;
+    inset: 0;
+    opacity: 0.06;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.3'/%3E%3C/svg%3E");
+  }
+}

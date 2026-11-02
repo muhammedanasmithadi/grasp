@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, Suspense } from 'react'
+import React, { useRef, useEffect, useMemo, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Line, Html, Gltf, Environment } from '@react-three/drei'
 import * as THREE from 'three'
@@ -176,6 +176,49 @@ function makeTaperedTube(
   return geo
 }
 
+/** Poly Haven gltfs point their textures at a sibling textures/ dir
+ * that does not exist on the CDN; the real maps live under the jpg/
+ * tree for the same asset and resolution. Rewrite relative URIs to
+ * absolute ones (textures/ -> jpg tree, everything else -> gltf dir)
+ * so the models arrive fully textured. Khronos assets are untouched. */
+async function polyhavenBlobUrl(url: string): Promise<string> {
+  const text = await (await fetch(url)).text()
+  const dir = url.slice(0, url.lastIndexOf('/') + 1)
+  const m = url.match(/\/Models\/gltf\/([^/]+)\/([^/]+)\//)
+  const jpgBase = m
+    ? `https://dl.polyhaven.org/file/ph-assets/Models/jpg/${m[1]}/${m[2]}/`
+    : dir
+  const patched = text
+    .replace(/"uri"\s*:\s*"textures\//g, `"uri": "${jpgBase}`)
+    .replace(/"uri"\s*:\s*"(?!https?:|data:|blob:)/g, `"uri": "${dir}`)
+  return URL.createObjectURL(new Blob([patched], { type: 'model/gltf+json' }))
+}
+
+function ModelMesh({ url, scale }: { url: string; scale: [number, number, number] }) {
+  const polyhaven = url.includes('polyhaven.org')
+  const [src, setSrc] = useState<string | null>(polyhaven ? null : url)
+  useEffect(() => {
+    if (!polyhaven) return
+    let live = true
+    let blob = ''
+    polyhavenBlobUrl(url).then((b) => {
+      if (live) setSrc(b)
+      else URL.revokeObjectURL(b)
+      blob = b
+    })
+    return () => {
+      live = false
+      if (blob) URL.revokeObjectURL(blob)
+    }
+  }, [url, polyhaven])
+  if (!src) return null
+  return (
+    <Suspense fallback={null}>
+      <Gltf src={src} scale={scale} castShadow />
+    </Suspense>
+  )
+}
+
 function useTubeGeometry(path: [number, number, number][] | undefined, radius: number) {
   return useMemo(() => {
     if (!path || path.length < 2) return null
@@ -323,9 +366,7 @@ function DslNodeMesh({
       rotation={[node.transform.r[0], node.transform.r[1], node.transform.r[2]]}
     >
       {isModel ? (
-        <Suspense fallback={null}>
-          <Gltf src={node.geometry!.url!} scale={node.transform.s} castShadow />
-        </Suspense>
+        <ModelMesh url={node.geometry!.url!} scale={node.transform.s} />
       ) : isPoints ? (
         <group scale={node.transform.s}>
           <PointsCloud

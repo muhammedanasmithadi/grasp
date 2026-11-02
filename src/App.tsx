@@ -266,8 +266,15 @@ export default function App() {
                   </div>
                 </form>
                 {apiError && (
-                  <div className="mt-3 p-3 border-2 border-a04000 bg-fdeee2 text-[10px] font-bold text-a04000 rounded w-full">
-                    API unavailable — {apiError}
+                  <div className="mt-3 p-3 border-2 border-a04000 bg-fdeee2 text-[10px] font-bold text-a04000 rounded w-full flex items-center gap-3">
+                    <span className="flex-1">API unavailable — {apiError}</span>
+                    <button
+                      className="shrink-0 px-4 py-2 border-2 border-a04000 bg-white text-a04000 uppercase tracking-widest hover:bg-a04000 hover:text-white transition-all disabled:opacity-50"
+                      onClick={handleAsk}
+                      disabled={loading || !query.trim()}
+                    >
+                      Try again
+                    </button>
                   </div>
                 )}
                 <p className="text-sm text-slate leading-relaxed mt-4 italic text-center">Any mechanism, any concept. Agents reconstruct the causal chain; you learn by repairing what they break.</p>

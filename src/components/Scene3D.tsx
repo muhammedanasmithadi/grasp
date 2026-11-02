@@ -536,13 +536,54 @@ export default function Scene3D({
     ? visibleNodes.map((n) => new THREE.Vector3(n.transform.p[0], n.transform.p[1], n.transform.p[2]))
     : layoutPositions(beats.length)
   const jointsByNode = (id: string): DslJoint[] => joints.filter((j) => j.b === id)
+  const frameKey = JSON.stringify({
+    nodes: visibleNodes.map((n) => [n.transform.p, n.transform.s, n.geometry?.args, n.geometry?.path]),
+    fallback: positions.map((p) => p.toArray()),
+  })
+  // Frame on geometry extents, not node centers: a radius-6 sphere
+  // centered in a centers-only box gets its top cropped off.
   const box = useMemo(() => {
     const b = new THREE.Box3()
-    positions.forEach((p) => b.expandByPoint(p))
+    const tmp = new THREE.Vector3()
+    if (hasNodes) {
+      for (const n of visibleNodes) {
+        const p = n.transform.p
+        const s = n.transform.s
+        const sMax = Math.max(Math.abs(s[0]), Math.abs(s[1]), Math.abs(s[2]), 1)
+        let bound = 1.5 * sMax
+        const args = n.geometry?.args
+        if (Array.isArray(args) && args.length > 0) {
+          bound =
+            Math.max(...args.map((v) => Math.abs(Number(v) || 0)), 0.5) * sMax
+        }
+        const path = n.geometry?.path as unknown
+        if (Array.isArray(path) && path.length > 0) {
+          let reach = 0
+          for (const pt of path) {
+            if (Array.isArray(pt)) {
+              reach = Math.max(
+                reach,
+                Math.abs((Number(pt[0]) || 0) - p[0]),
+                Math.abs((Number(pt[1]) || 0) - p[1]),
+                Math.abs((Number(pt[2]) || 0) - p[2])
+              )
+            }
+          }
+          bound = Math.max(bound, reach)
+        }
+        bound = Math.max(bound, 0.5)
+        tmp.set(p[0] - bound, p[1] - bound, p[2] - bound)
+        b.expandByPoint(tmp)
+        tmp.set(p[0] + bound, p[1] + bound, p[2] + bound)
+        b.expandByPoint(tmp)
+      }
+    } else {
+      positions.forEach((p) => b.expandByPoint(p))
+    }
     if (b.isEmpty()) b.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(4, 2, 4))
     return b
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(positions.map((p) => p.toArray()))])
+  }, [frameKey])
   const center = useMemo(() => box.getCenter(new THREE.Vector3()), [box])
   const size = useMemo(() => box.getSize(new THREE.Vector3()), [box])
   const radius = Math.max(size.x, size.y, size.z) / 2

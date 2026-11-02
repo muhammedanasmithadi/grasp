@@ -1,4 +1,5 @@
 import React, { useReducer, useCallback, useMemo } from 'react'
+import { Effect } from 'effect'
 import { metaModelAPI } from './api/client'
 import { createMutation } from './api/mutations'
 import { verifyScene } from './api/verify'
@@ -183,7 +184,7 @@ export default function App() {
     dispatch({ type: 'ASK_START' })
 
     try {
-      const data = await metaModelAPI.generateScene(query.trim())
+      const data = await Effect.runPromise(metaModelAPI.generateScene(query.trim()))
       dispatch({ type: 'ASK_SUCCESS', payload: data })
     } catch (err) {
       console.error('[Grasp] API failed:', (err as Error).message)

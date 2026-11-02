@@ -1,38 +1,65 @@
-import { parseSceneCode } from './sceneCode';
-import { adaptDslToScene } from './parser';
-import type { SceneData } from '../types';
+import { Effect, Schedule } from "effect";
+import type { SceneData } from "../types";
+import { parseSceneCode } from "./sceneCode";
+import { adaptDslToScene } from "./parser";
+import {
+  ApiHttpError,
+  EmptyResponse,
+  NoApiKey,
+  Truncated,
+  type GenerateSceneError,
+} from "./errors";
 
-const API_BASE = (import.meta as unknown as Record<string, { VITE_META_API_BASE?: string; VITE_META_API_KEY?: string }>).env?.VITE_META_API_BASE || 'https://api.meta.ai/v1';
-const API_KEY = (import.meta as unknown as Record<string, { VITE_META_API_BASE?: string; VITE_META_API_KEY?: string }>).env?.VITE_META_API_KEY || '';
+const API_BASE =
+  (
+    import.meta as unknown as Record<
+      string,
+      { VITE_META_API_BASE?: string; VITE_META_API_KEY?: string }
+    >
+  ).env?.VITE_META_API_BASE || "https://api.meta.ai/v1";
+const API_KEY =
+  (
+    import.meta as unknown as Record<
+      string,
+      { VITE_META_API_BASE?: string; VITE_META_API_KEY?: string }
+    >
+  ).env?.VITE_META_API_KEY || "";
 
-export class MetaModelAPI {
-  constructor() {
+const MAX_ATTEMPTS = 3;
+
+interface ApiEnvelope {
+  choices?: Array<{
+    finish_reason?: unknown;
+    message?: { content?: unknown };
+  }>;
+}
+
+const singleAttempt = (
+  concept: string
+): Effect.Effect<SceneData, GenerateSceneError> =>
+  Effect.gen(function* () {
     if (!API_KEY) {
-      console.warn('[MetaModelAPI] No VITE_META_API_KEY set — API calls will fail');
+      return yield* Effect.fail(
+        new NoApiKey({
+          message:
+            "E_NO_API_KEY: no API key configured; set VITE_META_API_KEY in .env",
+        })
+      );
     }
-  }
 
-  async generateScene(concept: string): Promise<SceneData> {
-    if (!API_KEY) {
-      throw new Error('E_NO_API_KEY: no API key configured; set VITE_META_API_KEY in .env');
-    }
-
-    const lastError: string[] = [];
-    const maxRetries = 3;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await fetch(`${API_BASE}/chat/completions`, {
-          method: 'POST',
+    const response = yield* Effect.tryPromise({
+      try: () =>
+        fetch(`${API_BASE}/chat/completions`, {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'muse-spark-1.3',
+            model: "muse-spark-1.3",
             messages: [
               {
-                role: 'system',
+                role: "system",
                 content: `You generate a 3D teaching scene by writing calls to a fixed builder API. Infer the mechanism from the user prompt. Output ONLY code, one call per line. No prose. No markdown. No JSON.
 
 Available calls (args are strict JSON objects):
@@ -51,55 +78,87 @@ box({"id":"bar-$i","parent":null,"transform":{"p":[{"$i":[-8,1.5]},-0.3,0],"r":[
 Rules: "$i" in a string becomes the index. {"$i":[base,step]} in a numeric slot becomes base+i*step. Every becauseOf references an existing node id. Every beat has exactly one probe whose answer is a node id. Use 3-8 beats. Vary primitives: cylinders for shafts, pistons, rods, wheels and bars; boxes for housings and blocks; planes for ground or backdrops; tubes for pipes and coils. Never use boxes for everything. Set verification honestly: "solver" only if motion matches a closed-form formula, else "sketch". Never claim "sourced". Output ONLY the code.`,
               },
               {
-                role: 'user',
+                role: "user",
                 content: concept,
               },
             ],
             temperature: 0.0,
             max_tokens: 50000,
           }),
-        });
+        }),
+      catch: () =>
+        new ApiHttpError({
+          status: 0,
+          message: "E_API_HTTP: network failure calling Meta Model API",
+        }),
+    });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`E_API_HTTP: API error (${response.status}): ${errorText.slice(0, 200)}`);
-        }
-
-        const data = await response.json();
-
-        if (data.choices?.[0]?.finish_reason === 'length') {
-          throw new Error('E_TRUNCATED: model hit the token ceiling mid-response; simplify the concept or shorten the prompt');
-        }
-
-        let content: string;
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-          content = data.choices[0].message.content ?? '';
-        } else if (typeof data === 'string') {
-          content = data;
-        } else {
-          content = JSON.stringify(data);
-        }
-
-        if (!content) {
-          throw new Error('E_EMPTY_RESPONSE: empty response from API');
-        }
-
-        console.log('[MetaModelAPI] raw content:', content?.slice(0, 500));
-
-        const dsl = parseSceneCode(content);
-        return adaptDslToScene(dsl);
-      } catch (err) {
-        // Truncation is deterministic for a fixed prompt: retrying wastes
-        // credits, so fail fast instead of burning all three attempts.
-        if ((err as Error).message.startsWith('E_TRUNCATED')) throw err;
-        lastError.push(`Attempt ${attempt}: ${(err as Error).message}`);
-        if (attempt < maxRetries) {
-          await new Promise((r) => setTimeout(r, 1000 * attempt));
-        }
-      }
+    if (!response.ok) {
+      const errorText = yield* Effect.tryPromise({
+        try: () => response.text(),
+        catch: () =>
+          new ApiHttpError({
+            status: response.status,
+            message: `E_API_HTTP: API error (${response.status}): unreadable body`,
+          }),
+      });
+      return yield* Effect.fail(
+        new ApiHttpError({
+          status: response.status,
+          message: `E_API_HTTP: API error (${response.status}): ${errorText.slice(0, 200)}`,
+        })
+      );
     }
 
-    throw new Error(`E_API_RETRIES_EXCEEDED: API failed after ${maxRetries} attempts: ${lastError.join(' | ')}`);
+    const data = (yield* Effect.tryPromise({
+      try: () => response.json(),
+      catch: () =>
+        new ApiHttpError({
+          status: response.status,
+          message: `E_API_HTTP: API returned non-JSON body (status ${response.status})`,
+        }),
+    })) as ApiEnvelope;
+
+    if (data.choices?.[0]?.finish_reason === "length") {
+      return yield* Effect.fail(
+        new Truncated({
+          message:
+            "E_TRUNCATED: model hit the token ceiling mid-response; simplify the concept or shorten the prompt",
+        })
+      );
+    }
+
+    const raw = data.choices?.[0]?.message?.content;
+    const content = typeof raw === "string" ? raw : "";
+    if (!content) {
+      return yield* Effect.fail(
+        new EmptyResponse({ message: "E_EMPTY_RESPONSE: empty response from API" })
+      );
+    }
+
+    yield* Effect.sync(() =>
+      console.log("[MetaModelAPI] raw content:", content?.slice(0, 500))
+    );
+
+    const dsl = yield* parseSceneCode(content);
+    return adaptDslToScene(dsl);
+  });
+
+export class MetaModelAPI {
+  constructor() {
+    if (!API_KEY) {
+      console.warn(
+        "[MetaModelAPI] No VITE_META_API_KEY set — API calls will fail"
+      );
+    }
+  }
+
+  generateScene(concept: string): Effect.Effect<SceneData, GenerateSceneError> {
+    return Effect.retry(singleAttempt(concept), {
+      times: MAX_ATTEMPTS - 1,
+      schedule: Schedule.exponential("1 second"),
+      while: (e) => e._tag !== "Truncated",
+    });
   }
 }
 

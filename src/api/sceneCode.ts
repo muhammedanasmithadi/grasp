@@ -14,140 +14,208 @@
 // replaced by the index, and {"$NAME": [base, step]} in any numeric slot
 // becomes base + index * step.
 //
-// Anything else is refused with a named E_CODE_* error. Never faked.
+// Anything else fails with a named E_CODE_* error. Never faked.
 
-import type { SceneDsl, DslNode, DslJoint, DslBeat } from '../types';
-import { validateSceneDsl } from './validateDsl';
-import { findSceneJSON } from './parser';
+import { Effect } from "effect";
+import type { SceneDsl } from "../types";
+import { SceneCodeError, type ValidationError } from "./errors";
+import { validateSceneDsl } from "./validateDsl";
 
 type Stmt =
-  | { kind: 'call'; fn: string; arg: unknown; line: number }
-  | { kind: 'for'; varName: string; from: number; to: number; body: Stmt[]; line: number };
+  | { kind: "call"; fn: string; arg: unknown; line: number }
+  | { kind: "for"; varName: string; from: number; to: number; body: Stmt[]; line: number };
 
 const CALL_NAMES = new Set([
-  'concept',
-  'theme',
-  'box',
-  'cylinder',
-  'tube',
-  'plane',
-  'hinge',
-  'slider',
-  'gear',
-  'beat',
-  'camera',
+  "concept",
+  "theme",
+  "box",
+  "cylinder",
+  "tube",
+  "plane",
+  "hinge",
+  "slider",
+  "gear",
+  "beat",
+  "camera",
 ]);
 
 const FOR_RE = /^for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+range\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)\s*\{\s*$/;
 const CALL_RE = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(/;
 
-function stripLineComment(line: string): string {
-  // '#' starts a comment only outside strings; keep it simple: full-line
-  // comments are dropped by the caller, inline '#' is passed through.
-  return line;
-}
+const fail = (
+  message: string
+): Effect.Effect<never, SceneCodeError> =>
+  Effect.fail(new SceneCodeError({ message }));
 
-function parseBlock(lines: string[], start: number, inBrace: boolean): { stmts: Stmt[]; next: number } {
-  const stmts: Stmt[] = [];
-  let i = start;
-  while (i < lines.length) {
-    const raw = stripLineComment(lines[i]);
-    const line = raw.trim();
-    const lineNo = i + 1;
-    if (line === '' || line.startsWith('#')) {
-      i++;
-      continue;
-    }
-    if (line === '}') {
-      if (!inBrace) throw new Error(`E_CODE_SYNTAX: stray closing brace on line ${lineNo}`);
-      return { stmts, next: i + 1 };
-    }
-    const forMatch = FOR_RE.exec(line);
-    if (forMatch) {
-      const [, varName, fromS, toS] = forMatch;
-      const from = parseInt(fromS, 10);
-      const to = parseInt(toS, 10);
-      if (to - from > 500) throw new Error(`E_CODE_RANGE: range too large on line ${lineNo} (max 500 iterations)`);
-      const inner = parseBlock(lines, i + 1, true);
-      stmts.push({ kind: 'for', varName, from, to, body: inner.stmts, line: lineNo });
-      i = inner.next;
-      continue;
-    }
-    const callMatch = CALL_RE.exec(line);
-    if (callMatch) {
-      const fn = callMatch[1];
-      if (!CALL_NAMES.has(fn)) throw new Error(`E_CODE_UNKNOWN_FN: unknown function "${fn}" on line ${lineNo}`);
-      // Gather text from the opening paren until parens balance (string-aware).
-      let text = lines.slice(i).join('\n');
-      const openIdx = text.indexOf('(');
-      let depth = 0;
-      let inStr = false;
-      let esc = false;
-      let end = -1;
-      for (let k = openIdx; k < text.length; k++) {
-        const ch = text[k];
-        if (inStr) {
-          if (esc) esc = false;
-          else if (ch === '\\') esc = true;
-          else if (ch === '"') inStr = false;
-          continue;
+function parseBlock(
+  lines: string[],
+  start: number,
+  inBrace: boolean
+): Effect.Effect<{ stmts: Stmt[]; next: number }, SceneCodeError> {
+  return Effect.gen(function* () {
+    const stmts: Stmt[] = [];
+    let i = start;
+    while (i < lines.length) {
+      const raw = lines[i];
+      const line = raw.trim();
+      const lineNo = i + 1;
+      if (line === "" || line.startsWith("#")) {
+        i++;
+        continue;
+      }
+      if (line === "}") {
+        if (!inBrace) {
+          return yield* fail(
+            `E_CODE_SYNTAX: stray closing brace on line ${lineNo}`
+          );
         }
-        if (ch === '"') inStr = true;
-        else if (ch === '(') depth++;
-        else if (ch === ')') {
-          depth--;
-          if (depth === 0) {
-            end = k;
-            break;
+        return { stmts, next: i + 1 };
+      }
+      const forMatch = FOR_RE.exec(line);
+      if (forMatch) {
+        const [, varName, fromS, toS] = forMatch;
+        const from = parseInt(fromS, 10);
+        const to = parseInt(toS, 10);
+        if (to - from > 500) {
+          return yield* fail(
+            `E_CODE_RANGE: range too large on line ${lineNo} (max 500 iterations)`
+          );
+        }
+        const inner = yield* parseBlock(lines, i + 1, true);
+        stmts.push({
+          kind: "for",
+          varName,
+          from,
+          to,
+          body: inner.stmts,
+          line: lineNo,
+        });
+        i = inner.next;
+        continue;
+      }
+      const callMatch = CALL_RE.exec(line);
+      if (callMatch) {
+        const fn = callMatch[1];
+        if (!CALL_NAMES.has(fn)) {
+          return yield* fail(
+            `E_CODE_UNKNOWN_FN: unknown function "${fn}" on line ${lineNo}`
+          );
+        }
+        // Gather text from the opening paren until parens balance (string-aware).
+        const text = lines.slice(i).join("\n");
+        const openIdx = text.indexOf("(");
+        let depth = 0;
+        let inStr = false;
+        let esc = false;
+        let end = -1;
+        for (let k = openIdx; k < text.length; k++) {
+          const ch = text[k];
+          if (inStr) {
+            if (esc) esc = false;
+            else if (ch === "\\") esc = true;
+            else if (ch === '"') inStr = false;
+            continue;
+          }
+          if (ch === '"') inStr = true;
+          else if (ch === "(") depth++;
+          else if (ch === ")") {
+            depth--;
+            if (depth === 0) {
+              end = k;
+              break;
+            }
           }
         }
+        if (end === -1) {
+          return yield* fail(
+            `E_CODE_SYNTAX: unbalanced call starting on line ${lineNo}`
+          );
+        }
+        const argText = text.slice(openIdx + 1, end).trim();
+        let arg: unknown;
+        try {
+          arg = JSON.parse(argText.length === 0 ? "null" : argText);
+        } catch {
+          return yield* fail(
+            `E_CODE_BAD_ARG: argument is not valid JSON on line ${lineNo}`
+          );
+        }
+        // Advance i past all lines consumed by this call.
+        const consumed = text.slice(0, end + 1).split("\n").length;
+        stmts.push({ kind: "call", fn, arg, line: lineNo });
+        i += consumed;
+        continue;
       }
-      if (end === -1) throw new Error(`E_CODE_SYNTAX: unbalanced call starting on line ${lineNo}`);
-      const argText = text.slice(openIdx + 1, end).trim();
-      let arg: unknown;
-      try {
-        arg = JSON.parse(argText.length === 0 ? 'null' : argText);
-      } catch {
-        throw new Error(`E_CODE_BAD_ARG: argument is not valid JSON on line ${lineNo}`);
-      }
-      // Advance i past all lines consumed by this call.
-      const consumed = text.slice(0, end + 1).split('\n').length;
-      stmts.push({ kind: 'call', fn, arg, line: lineNo });
-      i += consumed;
-      continue;
+      return yield* fail(
+        `E_CODE_SYNTAX: cannot parse line ${lineNo}: "${line.slice(0, 60)}"`
+      );
     }
-    throw new Error(`E_CODE_SYNTAX: cannot parse line ${lineNo}: "${line.slice(0, 60)}"`);
-  }
-  if (inBrace) throw new Error('E_CODE_SYNTAX: unclosed "{" block at end of input');
-  return { stmts, next: i };
+    if (inBrace) {
+      return yield* fail('E_CODE_SYNTAX: unclosed "{" block at end of input');
+    }
+    return { stmts, next: i };
+  });
 }
 
-function substitute(value: unknown, scope: Record<string, number>): unknown {
-  if (typeof value === 'string') {
-    return value.replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (m, name) => {
-      if (!(name in scope)) throw new Error(`E_CODE_UNKNOWN_VAR: unknown variable "${m}"`);
-      return String(scope[name]);
-    });
-  }
-  if (typeof value === 'number' || typeof value === 'boolean' || value === null) return value;
-  if (Array.isArray(value)) return value.map((v) => substitute(v, scope));
-  if (typeof value === 'object') {
-    const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj);
-    if (keys.length === 1 && keys[0].startsWith('$')) {
-      const varName = keys[0].slice(1);
-      if (!(varName in scope)) throw new Error(`E_CODE_UNKNOWN_VAR: unknown variable "${keys[0]}"`);
-      const spec = obj[keys[0]];
-      if (!Array.isArray(spec) || spec.length !== 2 || typeof spec[0] !== 'number' || typeof spec[1] !== 'number') {
-        throw new Error(`E_CODE_BAD_ARG: {"$var": [base, step]} needs two numbers`);
+function substitute(
+  value: unknown,
+  scope: Record<string, number>
+): Effect.Effect<unknown, SceneCodeError> {
+  return Effect.gen(function* () {
+    if (typeof value === "string") {
+      let out = value;
+      for (const [name, idx] of Object.entries(scope)) {
+        out = out.split(`$${name}`).join(String(idx));
       }
-      return spec[0] + scope[varName] * spec[1];
+      const leftover = out.match(/\$[A-Za-z_][A-Za-z0-9_]*/);
+      if (leftover) {
+        return yield* fail(
+          `E_CODE_UNKNOWN_VAR: unknown variable "${leftover[0]}"`
+        );
+      }
+      return out;
     }
-    const out: Record<string, unknown> = {};
-    for (const k of keys) out[k] = substitute(obj[k], scope);
-    return out;
-  }
-  throw new Error('E_CODE_BAD_ARG: unsupported argument value');
+    if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    ) {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return yield* Effect.forEach(value, (v) => substitute(v, scope));
+    }
+    if (typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      const keys = Object.keys(obj);
+      if (keys.length === 1 && keys[0].startsWith("$")) {
+        const varName = keys[0].slice(1);
+        if (!(varName in scope)) {
+          return yield* fail(
+            `E_CODE_UNKNOWN_VAR: unknown variable "${keys[0]}"`
+          );
+        }
+        const spec = obj[keys[0]];
+        if (
+          !Array.isArray(spec) ||
+          spec.length !== 2 ||
+          typeof spec[0] !== "number" ||
+          typeof spec[1] !== "number"
+        ) {
+          return yield* fail(
+            'E_CODE_BAD_ARG: {"$var": [base, step]} needs two numbers'
+          );
+        }
+        return spec[0] + scope[varName] * spec[1];
+      }
+      const out: Record<string, unknown> = {};
+      for (const k of keys) {
+        out[k] = yield* substitute(obj[k], scope);
+      }
+      return out;
+    }
+    return yield* fail("E_CODE_BAD_ARG: unsupported argument value");
+  });
 }
 
 interface Builder {
@@ -160,98 +228,138 @@ interface Builder {
 }
 
 const DEFAULT_TRANSFORM = { p: [0, 0, 0], r: [0, 0, 0], s: [1, 1, 1] };
-const DEFAULT_MATERIAL = { roughness: 0.5, metalness: 0.6, tint: '#E69F00' };
+const DEFAULT_MATERIAL = { roughness: 0.5, metalness: 0.6, tint: "#E69F00" };
 
-function execCall(builder: Builder, fn: string, arg: unknown, line: number): void {
-  if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) {
-    throw new Error(`E_CODE_BAD_ARG: ${fn} expects a JSON object on line ${line}`);
-  }
-  const a = arg as Record<string, unknown>;
-  switch (fn) {
-    case 'concept':
-      builder.concept = a;
-      break;
-    case 'theme':
-      builder.theme = a;
-      break;
-    case 'box':
-    case 'cylinder':
-    case 'tube':
-    case 'plane':
-      builder.nodes.push({
-        parent: a.parent ?? null,
-        transform: a.transform ?? DEFAULT_TRANSFORM,
-        material: a.material ?? DEFAULT_MATERIAL,
-        ...a,
-        type: fn,
-      });
-      break;
-    case 'hinge':
-    case 'slider':
-    case 'gear':
-      builder.joints.push({
-        anchor: a.anchor ?? [0, 0, 0],
-        axis: a.axis ?? [0, 0, 1],
-        range: a.range ?? [0, 360],
-        driver: a.driver ?? { kind: 'time', rpm: 30 },
-        ...a,
-        type: fn,
-      });
-      break;
-    case 'beat':
-      builder.beats.push(a);
-      break;
-    case 'camera':
-      builder.camera = a;
-      break;
-    default:
-      throw new Error(`E_CODE_UNKNOWN_FN: unknown function "${fn}" on line ${line}`);
-  }
-}
-
-function execStmts(builder: Builder, stmts: Stmt[], scope: Record<string, number>): void {
-  for (const s of stmts) {
-    if (s.kind === 'for') {
-      for (let i = s.from; i < s.to; i++) {
-        execStmts(builder, s.body, { ...scope, [s.varName]: i });
-      }
-    } else {
-      execCall(builder, s.fn, substitute(s.arg, scope), s.line);
+function execCall(
+  builder: Builder,
+  fn: string,
+  arg: unknown,
+  line: number
+): Effect.Effect<void, SceneCodeError> {
+  return Effect.gen(function* () {
+    if (typeof arg !== "object" || arg === null || Array.isArray(arg)) {
+      return yield* fail(
+        `E_CODE_BAD_ARG: ${fn} expects a JSON object on line ${line}`
+      );
     }
-  }
+    const a = arg as Record<string, unknown>;
+    switch (fn) {
+      case "concept":
+        builder.concept = a;
+        break;
+      case "theme":
+        builder.theme = a;
+        break;
+      case "box":
+      case "cylinder":
+      case "tube":
+      case "plane":
+        builder.nodes.push({
+          parent: a.parent ?? null,
+          transform: a.transform ?? DEFAULT_TRANSFORM,
+          material: a.material ?? DEFAULT_MATERIAL,
+          ...a,
+          type: fn,
+        });
+        break;
+      case "hinge":
+      case "slider":
+      case "gear":
+        builder.joints.push({
+          anchor: a.anchor ?? [0, 0, 0],
+          axis: a.axis ?? [0, 0, 1],
+          range: a.range ?? [0, 360],
+          driver: a.driver ?? { kind: "time", rpm: 30 },
+          ...a,
+          type: fn,
+        });
+        break;
+      case "beat":
+        builder.beats.push(a);
+        break;
+      case "camera":
+        builder.camera = a;
+        break;
+      default:
+        return yield* fail(
+          `E_CODE_UNKNOWN_FN: unknown function "${fn}" on line ${line}`
+        );
+    }
+  });
 }
 
-export function parseSceneCode(text: string): SceneDsl {
-  const t = (text ?? '').trim();
-  if (!t) throw new Error('E_EMPTY_INPUT: scene response has no text content');
-  // Back-compat: raw JSON still accepted (old model outputs, cached scenes).
-  if (t.startsWith('{') || t.startsWith('```')) {
-    const jsonText = findSceneJSON(t);
-    return validateSceneDsl(JSON.parse(jsonText));
-  }
-  const { stmts } = parseBlock(
-    t
-      .split('\n')
-      .map((l) => (l.trimStart().startsWith('#') ? '' : l)),
-    0,
-    false
-  );
-  if (stmts.length === 0) throw new Error('E_CODE_EMPTY: no statements found');
-  const builder: Builder = { nodes: [], joints: [], beats: [] };
-  execStmts(builder, stmts, {});
-  if (!builder.concept) throw new Error('E_CODE_MISSING: scene needs one concept({...}) call');
-  if (builder.nodes.length === 0) throw new Error('E_CODE_MISSING: scene needs at least one node call');
-  if (builder.beats.length === 0) throw new Error('E_CODE_MISSING: scene needs at least one beat({...}) call');
-  const dsl = {
-    dslVersion: '0.1',
-    concept: builder.concept,
-    theme: builder.theme ?? { motif: 'blueprint', palette: 'okabe-ito', keyAzimuth: 135 },
-    nodes: builder.nodes,
-    joints: builder.joints,
-    flows: [],
-    camera: builder.camera ?? { axisOfAction: [0, 1, 0], shots: [] },
-    beats: builder.beats,
-    audio: { layers: ['ambience', 'mech'] },
-  };
-  return validateSceneDsl(dsl);
+function execStmts(
+  builder: Builder,
+  stmts: Stmt[],
+  scope: Record<string, number>
+): Effect.Effect<void, SceneCodeError> {
+  return Effect.gen(function* () {
+    for (const s of stmts) {
+      if (s.kind === "for") {
+        for (let i = s.from; i < s.to; i++) {
+          yield* execStmts(builder, s.body, { ...scope, [s.varName]: i });
+        }
+      } else {
+        const arg = yield* substitute(s.arg, scope);
+        yield* execCall(builder, s.fn, arg, s.line);
+      }
+    }
+  });
+}
+
+export function parseSceneCode(
+  text: string
+): Effect.Effect<SceneDsl, SceneCodeError | ValidationError> {
+  return Effect.gen(function* () {
+    const t = (text ?? "").trim();
+    if (!t) {
+      return yield* fail("E_EMPTY_INPUT: scene response has no text content");
+    }
+    if (t.startsWith("{") || t.startsWith("```")) {
+      return yield* fail(
+        "E_CODE_NOT_CODE: expected builder calls, got raw JSON"
+      );
+    }
+    const { stmts } = yield* parseBlock(
+      t.split("\n").map((l) => (l.trimStart().startsWith("#") ? "" : l)),
+      0,
+      false
+    );
+    if (stmts.length === 0) {
+      return yield* fail("E_CODE_EMPTY: no statements found");
+    }
+    const builder: Builder = { nodes: [], joints: [], beats: [] };
+    yield* execStmts(builder, stmts, {});
+    if (!builder.concept) {
+      return yield* fail(
+        "E_CODE_MISSING: scene needs one concept({...}) call"
+      );
+    }
+    if (builder.nodes.length === 0) {
+      return yield* fail(
+        "E_CODE_MISSING: scene needs at least one node call"
+      );
+    }
+    if (builder.beats.length === 0) {
+      return yield* fail(
+        "E_CODE_MISSING: scene needs at least one beat({...}) call"
+      );
+    }
+    const dsl = {
+      dslVersion: "0.1",
+      concept: builder.concept,
+      theme: builder.theme ?? {
+        motif: "blueprint",
+        palette: "okabe-ito",
+        keyAzimuth: 135,
+      },
+      nodes: builder.nodes,
+      joints: builder.joints,
+      flows: [],
+      camera: builder.camera ?? { axisOfAction: [0, 1, 0], shots: [] },
+      beats: builder.beats,
+      audio: { layers: ["ambience", "mech"] },
+    };
+    return yield* validateSceneDsl(dsl);
+  });
 }

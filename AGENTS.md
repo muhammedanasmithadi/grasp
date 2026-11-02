@@ -28,7 +28,11 @@ Code edits: fast code model. Hardest judgment calls: strongest judgment model. P
 
 ## Verification gates (blocking)
 
-Run `bash scripts/verify.sh` before every commit. It runs `tsc --noEmit`, `vite build`, and the named-error lint (every `throw` in `src/api` must carry an `E_*` code). A failing gate blocks render and blocks commit.
+Run `bash scripts/verify.sh` before every commit. It runs `tsc --noEmit`, `vite build`, and the named-error lint (no `throw` in `src/api`; all failures are typed `Effect` errors carrying an `E_*` code). A failing gate blocks render and blocks commit.
+
+## Effect conventions
+
+Side effects live in `Effect`. Parsing, validation, and the API client return `Effect`. Pure domain logic stays plain functions. Never `throw`. The UI boundary is `Effect.runPromise` in `App.tsx`. Retry with `Effect.retry` plus `Schedule`. Truncation fails fast via a `while` guard on `_tag`.
 
 ## Writing rules
 

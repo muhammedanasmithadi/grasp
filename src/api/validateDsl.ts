@@ -58,6 +58,16 @@ export const validateSceneDsl = (
         "E_MEDIUM_UNKNOWN: concept.medium must be 3d|2d|hybrid"
       );
     }
+    const theme = d.theme as Record<string, unknown> | undefined;
+    if (
+      theme?.backdrop !== undefined &&
+      (typeof theme.backdrop !== "string" ||
+        !/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(theme.backdrop))
+    ) {
+      return yield* fail(
+        "E_THEME_BACKDROP: theme.backdrop must be a hex color like #e9e4d6",
+      );
+    }
     if (!Array.isArray(d.nodes)) {
       return yield* fail("E_NODES_MISSING: nodes[] is required");
     }

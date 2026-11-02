@@ -217,8 +217,8 @@ export default function App() {
           )}
         </header>
 
-        <div className="flex flex-1 overflow-hidden relative">
-          <main className="flex-1 relative bg-f3efe1 flex items-center justify-center p-10">
+        <div className="flex flex-1 min-h-0 overflow-hidden relative">
+          <main className={`flex-1 min-w-0 bg-f3efe1 flex p-6 lg:p-8 overflow-y-auto ${screen === 'ask' ? 'items-center justify-center' : 'flex-col gap-4'}`}>
             {screen === 'ask' && (
               <div className="flex flex-col items-center justify-center h-full w-full max-w-xl text-slate">
                 <div className="text-6xl font-black text-2c2418 mb-4">Ask</div>
@@ -266,21 +266,19 @@ export default function App() {
             )}
             {screen === 'scene' && (
               <>
-                <div className="absolute top-8 right-8 z-40 pointer-events-none">
-                  <div className={`inline-flex items-center gap-3 px-4 py-2 border-2 border-a04000 bg-fdeee2 text-[11px] font-bold text-a04000 uppercase tracking-tighter ${sabotageMode ? '' : 'hidden'}`}>
+                <div className="flex items-center gap-4 shrink-0 flex-wrap">
+                  <div className="beat-badge">{currentBeat}</div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold text-slate uppercase tracking-widest">Beat {currentBeat} of {beats.length}</div>
+                    <div className="text-lg font-bold text-2c2418 truncate">{beat?.goal || beat?.title}</div>
+                  </div>
+                  <div className={`ml-auto inline-flex items-center gap-3 px-4 py-2 border-2 border-a04000 bg-fdeee2 text-[11px] font-bold text-a04000 uppercase tracking-tighter ${sabotageMode ? '' : 'hidden'}`}>
                     <span className="w-3 h-3 bg-a04000 animate-pulse"></span>
                     Fault detected
                   </div>
                 </div>
 
-                <div className="absolute top-8 left-8 z-40">
-                  <div className="beat-badge">{currentBeat}</div>
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-44 text-[10px] font-bold text-slate uppercase tracking-widest text-center">
-                    Beat · {beat?.goal || beat?.title}
-                  </div>
-                </div>
-
-                <div className="relative w-full max-w-5xl h-[65vh] craft-panel flex items-center justify-center p-8 overflow-hidden">
+                <div className="relative w-full flex-1 min-h-[50vh] craft-panel overflow-hidden">
                   <div className="absolute inset-0 border-2 border-white/40 pointer-events-none" />
                   {medium === '2d' ? (
                     <Scene2D
@@ -304,32 +302,18 @@ export default function App() {
                       time={beatTime}
                       playing
                       medium={medium}
+                      backdrop={sceneData?.dsl?.theme?.backdrop}
+                      focusNodeIds={[...activeNodeIds, ...faultNodeIds]}
+                      sceneKey={concept?.id ?? 'scene'}
                     />
                   )}
                 </div>
-
-                <div className="absolute bottom-8 right-8 z-40 flex flex-col items-center justify-end">
-                  <input
-                    type="range"
-                    min={0}
-                    max={totalDuration}
-                    step={0.1}
-                    value={beatTime}
-                    className="w-48 range-slider"
-                    onChange={(e) => seekToTime(parseFloat(e.target.value))}
-                    aria-label="Scrub timeline"
-                  />
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] font-mono text-slate">0s</span>
-                    <div className="w-1 h-1 bg-slate"></div>
-                    <span className="text-[10px] font-mono text-slate">{totalDuration}s</span>
-                  </div>
-                </div>
               </>
             )}
-            {screen === 'scene' && (
-              <aside className="w-104 border-l-2 border-c9ba9e bg-f3efe1 flex flex-col z-20">
-                <div className="p-10">
+          </main>
+          {screen === 'scene' && (
+            <aside className="w-[26rem] shrink-0 border-l-2 border-c9ba9e bg-f3efe1 flex flex-col z-20 overflow-y-auto">
+                <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest">Causal spine</h3>
                     <span className={`inline-flex items-center gap-2 px-3 py-1 border-2 ${sabotageMode ? 'border-a04000 bg-fdeee2 text-a04000' : verification?.badge === 'solver' ? 'border-009e73 bg-009e73/5 text-009e73' : 'border-c9ba9e bg-white text-slate'} text-[10px] font-bold uppercase tracking-tighter`}>{badgeLabel}</span>
@@ -357,7 +341,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="p-10 border-t-2 border-c9ba9e">
+                <div className="p-6 border-t-2 border-c9ba9e">
                   <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest mb-4">Narration</h3>
                   <div className="text-lg text-2c2418 leading-relaxed italic serif fade-in">
                     <span className="drop-cap">{beat?.narration?.[0]}</span>{beat?.narration?.slice(1) || ''}
@@ -365,7 +349,7 @@ export default function App() {
                   <div className="mt-4 marginalia">{isSabotage ? `Note: The ${beat?.part} beat has a causal fault. Locate the driver.` : 'Follow the causal chain through each beat.'}</div>
                 </div>
 
-                <div className="p-10 border-t-2 border-c9ba9e">
+                <div className="p-6 border-t-2 border-c9ba9e">
                   <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest mb-4">Fault drill</h3>
                   {!sabotageMode ? (
                     <button
@@ -406,7 +390,7 @@ export default function App() {
                   ) : null}
                 </div>
 
-                <div className="mt-auto p-10 border-t-2 border-c9ba9e">
+                <div className="mt-auto p-6 border-t-2 border-c9ba9e">
                   {!showMastery ? (
                     <button
                       className="w-full flex items-center justify-center gap-3 px-6 py-4 border-2 border-c9ba9e bg-white text-base font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all"
@@ -433,23 +417,42 @@ export default function App() {
                 </div>
               </aside>
             )}
-            {screen === 'scene' && (
-              <footer className="h-20 border-t-2 border-c9ba9e bg-white/30 flex items-center justify-between px-10 z-30">
-                <div className="flex items-center gap-3">
-                  <div className="text-[10px] font-bold text-slate uppercase tracking-widest">Pre/post mastery delta</div>
-                  <div className="flex items-center gap-3 text-[11px] font-bold text-deepGreen uppercase tracking-tighter">
-                    <span className="w-3 h-3 bg-009e73"></span>
-                    <span>{badgeLabel}</span>
-                  </div>
-                  <div className="text-[11px] font-mono font-bold text-b8860b">+{masteryDelta ?? 0}%</div>
-                </div>
-                <div className="text-[10px] font-mono text-slate uppercase tracking-widest">
-                  Beat {currentBeat} of {beats.length} · {medium}
-                </div>
-              </footer>
-            )}
-          </main>
         </div>
+          {screen === 'scene' && (
+            <footer className="shrink-0 border-t-2 border-c9ba9e bg-f3efe1 px-6 py-3 z-30 flex items-center gap-4 overflow-x-auto">
+              <div className="flex items-center gap-2 shrink-0">
+                {beats.map((b, i) => (
+                  <button
+                    key={String(b.id)}
+                    onClick={() => dispatch({ type: 'SET_BEAT', payload: i + 1 })}
+                    className={`w-8 h-8 text-xs font-black border-2 transition-all ${i + 1 === currentBeat ? 'border-b8860b bg-b8860b text-white' : 'border-c9ba9e bg-white text-2c2418 hover:border-b8860b'}`}
+                    aria-label={`Go to beat ${i + 1}`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={totalDuration}
+                step={0.1}
+                value={beatTime}
+                className="flex-1 min-w-32 range-slider"
+                onChange={(e) => seekToTime(parseFloat(e.target.value))}
+                aria-label="Scrub timeline"
+              />
+              <div className="text-[10px] font-mono text-slate uppercase tracking-widest whitespace-nowrap">0s · {totalDuration}s</div>
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-tighter whitespace-nowrap">
+                <span className="w-3 h-3 bg-009e73"></span>
+                <span>{badgeLabel}</span>
+              </div>
+              <div className="text-[11px] font-mono font-bold text-b8860b whitespace-nowrap">+{masteryDelta ?? 0}%</div>
+              <div className="text-[10px] font-mono text-slate uppercase tracking-widest whitespace-nowrap">
+                Beat {currentBeat} of {beats.length} · {medium}
+              </div>
+            </footer>
+          )}
       </div>
     </>
   )

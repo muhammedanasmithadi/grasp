@@ -249,6 +249,46 @@ interface Builder {
 const DEFAULT_TRANSFORM = { p: [0, 0, 0], r: [0, 0, 0], s: [1, 1, 1] };
 const DEFAULT_MATERIAL = { roughness: 0.5, metalness: 0.6, tint: "#E69F00" };
 
+const STAGE_LIMIT = 60;
+
+// Clamp absurd extents into the stage so one giant slab cannot swallow the
+// scene. Defensive rendering, not validation: the model output still parses.
+function clampNum(v: unknown, fallback: number): number {
+  const n = typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  return Math.max(-STAGE_LIMIT, Math.min(STAGE_LIMIT, n));
+}
+
+function sanitizeNode(
+  a: Record<string, unknown>,
+  fn: string
+): Record<string, unknown> {
+  const t =
+    a.transform && typeof a.transform === "object"
+      ? (a.transform as Record<string, unknown>)
+      : {};
+  const p = Array.isArray(t.p) ? t.p : [0, 0, 0];
+  const s = Array.isArray(t.s) ? t.s : [1, 1, 1];
+  const g =
+    a.geometry && typeof a.geometry === "object"
+      ? (a.geometry as Record<string, unknown>)
+      : undefined;
+  const args = Array.isArray(g?.args)
+    ? (g.args as unknown[]).map((v) => clampNum(v, 1))
+    : undefined;
+  return {
+    ...a,
+    type: fn,
+    parent: a.parent ?? null,
+    transform: {
+      p: [clampNum(p[0], 0), clampNum(p[1], 0), clampNum(p[2], 0)],
+      r: Array.isArray(t.r) ? t.r : [0, 0, 0],
+      s: [clampNum(s[0], 1), clampNum(s[1], 1), clampNum(s[2], 1)],
+    },
+    material: a.material ?? DEFAULT_MATERIAL,
+    ...(g ? { geometry: { ...g, ...(args ? { args } : {}) } } : {}),
+  };
+}
+
 function execCall(
   builder: Builder,
   fn: string,
@@ -286,13 +326,7 @@ function execCall(
       case "plane":
       case "model":
       case "points":
-        builder.nodes.push({
-          parent: a.parent ?? null,
-          transform: a.transform ?? DEFAULT_TRANSFORM,
-          material: a.material ?? DEFAULT_MATERIAL,
-          ...a,
-          type: fn,
-        });
+        builder.nodes.push(sanitizeNode(a, fn));
         break;
       case "hinge":
       case "slider":

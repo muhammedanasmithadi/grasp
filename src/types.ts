@@ -144,6 +144,7 @@ export interface DslTheme {
   motif: string;
   palette: 'okabe-ito';
   keyAzimuth: number;
+  backdrop?: string;
 }
 
 export interface SceneDsl {

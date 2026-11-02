@@ -545,8 +545,24 @@ export default function Scene3D({
   const box = useMemo(() => {
     const b = new THREE.Box3()
     const tmp = new THREE.Vector3()
+    // Frame on subjects, not the stage: a big flat ground plane would
+    // shrink everything else to a speck. Ground routinely extends
+    // past the frame edge in photography; subjects must not.
+    const isBackdrop = (n: (typeof visibleNodes)[number]): boolean => {
+      if (n.type !== 'plane' && n.type !== 'circle') return false
+      const flat = Math.abs(n.transform.r[0] + Math.PI / 2) < 0.15
+      const args = n.geometry?.args
+      const wide =
+        Array.isArray(args) &&
+        args.some((v) => Math.abs(Number(v) || 0) > 8)
+      return flat && wide
+    }
+    const subjects =
+      visibleNodes.some((n) => !isBackdrop(n)) || !hasNodes
+        ? visibleNodes.filter((n) => !isBackdrop(n))
+        : visibleNodes
     if (hasNodes) {
-      for (const n of visibleNodes) {
+      for (const n of subjects) {
         const p = n.transform.p
         const s = n.transform.s
         const sMax = Math.max(Math.abs(s[0]), Math.abs(s[1]), Math.abs(s[2]), 1)

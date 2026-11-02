@@ -216,16 +216,26 @@ export const validateSceneDsl = (
       }
     }
 
-    // Hero gate: the opening focus (beat 1 becauseOf[0]) must not be a
-    // dull opaque slab. A model, transmissive glass, glow, or metal lead
-    // carries the scene; flat matte boxes and planes do not. Missing
-    // material fields fall back to the renderer's satin defaults.
+    // Hero gate: some part must carry the scene. A model, transmissive
+    // glass, glow, metal, or textured map counts as rich. Only a world
+    // with no rich part anywhere AND a dull-slab opening focus fails.
+    // Missing material fields fall back to the renderer's satin defaults.
     const beats = d.beats as Record<string, unknown>[];
+    const nodes = d.nodes as Record<string, unknown>[];
+    const isRich = (n: Record<string, unknown>): boolean => {
+      if (n.type === "model") return true;
+      const mat = (n.material ?? {}) as Record<string, unknown>;
+      const trans =
+        typeof mat.transmission === "number" ? mat.transmission : 0;
+      const metal = typeof mat.metalness === "number" ? mat.metalness : 0.6;
+      const glow = typeof mat.emissive === "string" && mat.emissive.length > 0;
+      const mapped = typeof mat.map === "string" && mat.map.length > 0;
+      return trans > 0.3 || metal > 0.5 || glow || mapped;
+    };
     const leadRef = (beats[0]?.becauseOf as unknown[])?.[0];
-    const lead = (d.nodes as Record<string, unknown>[]).find(
-      (n) => n.id === leadRef
-    );
-    if (lead) {
+    const lead = nodes.find((n) => n.id === leadRef);
+    const anyRich = nodes.some(isRich);
+    if (lead && !anyRich) {
       const mat = (lead.material ?? {}) as Record<string, unknown>;
       const rough =
         typeof mat.roughness === "number" ? mat.roughness : 0.5;
@@ -237,13 +247,12 @@ export const validateSceneDsl = (
       const flatType = lead.type === "box" || lead.type === "plane";
       if (flatType && rough >= 0.7 && metal <= 0.2 && trans <= 0.3 && !glow) {
         return yield* fail(
-          `E_HERO_DULL: lead node "${String(lead.id)}" is a flat opaque slab; make the hero a model, glass, glow, or metal`
+          `E_HERO_DULL: no rich part in scene and lead node "${String(lead.id)}" is a flat opaque slab; add a model, glass, glow, metal, or textured part`
         );
       }
     }
     const medium = (concept.medium as string) || "3d";
     if (medium === "3d") {
-      const nodes = d.nodes as Record<string, unknown>[];
       const joints = d.joints as unknown[];
       const anyNonUniform = nodes.some((n) => {
         const t = n.transform as { s?: unknown } | undefined;

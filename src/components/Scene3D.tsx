@@ -556,27 +556,30 @@ export default function Scene3D({
     const globalFloor = Math.min(
       ...visibleNodes.map((n) => n.transform.p[1] - yHalf(n))
     )
+    // Stage grounds are excluded from framing so subjects fill the
+    // frame. Dimensions are scaled: an args-8 plane at scale 3 is a
+    // 24-unit ground, not an 8-unit one. Vertical boxes (walls, doors)
+    // are never grounds; only thin-Y slabs sitting on the floor are.
+    const scaledDims = (n: (typeof visibleNodes)[number]): number[] => {
+      const args = n.geometry?.args
+      const a = (i: number): number =>
+        Array.isArray(args) ? Math.abs(Number(args[i]) || 0) : 0
+      const s = n.transform.s
+      if (n.type === 'box') return [a(0) * Math.abs(s[0]), a(1) * Math.abs(s[1]), a(2) * Math.abs(s[2])]
+      if (n.type === 'plane' || n.type === 'circle')
+        return [a(0) * Math.abs(s[0]), a(1) * Math.abs(s[1]), 0.1]
+      return [0, 0, 0]
+    }
     const isBackdrop = (n: (typeof visibleNodes)[number]): boolean => {
+      const dims = scaledDims(n)
+      if (Math.max(dims[0], dims[2]) < 10) return false
       if (n.type === 'plane' || n.type === 'circle') {
-        const flat = Math.abs(n.transform.r[0] + Math.PI / 2) < 0.15
-        const args = n.geometry?.args
-        const wide =
-          Array.isArray(args) &&
-          args.some((v) => Math.abs(Number(v) || 0) > 8)
-        return flat && wide
+        return Math.abs(n.transform.r[0] + Math.PI / 2) < 0.15
       }
-      // Thin flat box slabs sitting on the global floor are stage
-      // grounds, not subjects. Vertical thin boxes (walls) are kept.
       if (n.type === 'box') {
-        const args = n.geometry?.args
-        if (!Array.isArray(args) || args.length < 3) return false
-        const dims = [0, 1, 2].map(
-          (i) => Math.abs(Number(args[i]) || 0) * Math.abs(n.transform.s[i])
-        )
         const thinY = dims[1] <= 1.5
-        const wide = Math.max(dims[0], dims[2]) >= 8
         const onFloor = n.transform.p[1] - dims[1] / 2 <= globalFloor + 1.0
-        return thinY && wide && onFloor
+        return thinY && onFloor
       }
       return false
     }

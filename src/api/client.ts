@@ -19,9 +19,9 @@ export class MetaModelAPI {
     const lastError: string[] = [];
     const maxRetries = 3;
     // Output budget per attempt. muse-spark burns ~3k hidden reasoning
-    // tokens before writing, so 8000 fits today's scenes with headroom;
-    // a truncation steps up once instead of retrying the same ceiling.
-    const budgets = [8000, 16000, 16000];
+    // tokens before writing, so 8000 fits today's scenes; truncation steps
+    // up the ladder instead of retrying the same ceiling.
+    const budgets = [8000, 16000, 50000];
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {

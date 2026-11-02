@@ -252,6 +252,21 @@ const DEFAULT_MATERIAL = { roughness: 0.5, metalness: 0.6, tint: "#E69F00" };
 const STAGE_LIMIT = 60;
 const PART_LIMIT = 16;
 
+// Radius-like first args on volumetric shapes fill the frame fast:
+// a radius-16 sphere is 32 units across. Cap those tighter.
+const RADIUS_CAP: Record<string, number> = {
+  sphere: 6,
+  cone: 6,
+  cylinder: 6,
+  capsule: 6,
+  torus: 8,
+  torusKnot: 8,
+  tetrahedron: 6,
+  octahedron: 6,
+  dodecahedron: 6,
+  icosahedron: 6,
+};
+
 // Clamp absurd extents into the stage so one giant slab cannot swallow the
 // scene. Defensive rendering, not validation: the model output still parses.
 function clampNum(v: unknown, fallback: number, limit = STAGE_LIMIT): number {
@@ -273,8 +288,9 @@ function sanitizeNode(
     a.geometry && typeof a.geometry === "object"
       ? (a.geometry as Record<string, unknown>)
       : undefined;
+  const argCap = RADIUS_CAP[fn] ?? PART_LIMIT;
   const args = Array.isArray(g?.args)
-    ? (g.args as unknown[]).map((v) => clampNum(v, 1, PART_LIMIT))
+    ? (g.args as unknown[]).map((v) => clampNum(v, 1, argCap))
     : undefined;
   const radius =
     typeof g?.radius === "number" && Number.isFinite(g.radius)

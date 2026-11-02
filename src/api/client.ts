@@ -56,6 +56,10 @@ Rules: flat arrays only. Every becauseOf references an existing node id. Every b
 
         const data = await response.json();
 
+        if (data.choices?.[0]?.finish_reason === 'length') {
+          throw new Error('E_TRUNCATED: model hit the token ceiling mid-response; raise max_tokens or simplify the prompt');
+        }
+
         let content: string;
         if (data.choices && data.choices[0] && data.choices[0].message) {
           content = data.choices[0].message.content ?? '';
@@ -74,6 +78,9 @@ Rules: flat arrays only. Every becauseOf references an existing node id. Every b
         const dsl = parseStrictScene(content);
         return adaptDslToScene(dsl);
       } catch (err) {
+        // Truncation is deterministic for a fixed prompt: retrying wastes
+        // credits, so fail fast instead of burning all three attempts.
+        if ((err as Error).message.startsWith('E_TRUNCATED')) throw err;
         lastError.push(`Attempt ${attempt}: ${(err as Error).message}`);
         if (attempt < maxRetries) {
           await new Promise((r) => setTimeout(r, 1000 * attempt));

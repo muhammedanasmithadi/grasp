@@ -206,18 +206,8 @@ export default function App() {
       </div>
 
       <div className="relative z-10 flex flex-col h-screen w-screen overflow-hidden">
-        <header className="h-20 w-full border-b-2 border-c9ba9e bg-f3efe1 flex items-center justify-between px-10 z-30 shrink-0">
-          <div className="flex items-center gap-6">
-            <div className="text-3xl font-black text-2c2418 tracking-wider leading-none">GRASP</div>
-          </div>
-          <div className="flex items-center gap-8">
-            <div className="text-lg font-black text-2c2418 tracking-tighter">00</div>
-            <nav className="flex items-center gap-6 text-sm font-bold text-2c2418 uppercase tracking-widest">
-              <a href="#" className="hover:text-b8860b transition-colors">Work</a>
-              <a href="#" className="hover:text-b8860b transition-colors">Method</a>
-              <a href="#" className="hover:text-b8860b transition-colors">About</a>
-            </nav>
-          </div>
+        <header className="h-20 w-full border-b-2 border-c9ba9e bg-f3efe1 flex items-center px-10 z-30 shrink-0">
+          <div className="text-3xl font-black text-2c2418 tracking-wider leading-none">GRASP</div>
         </header>
 
         <div className="flex flex-1 overflow-hidden relative">

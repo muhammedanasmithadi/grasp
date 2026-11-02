@@ -3,6 +3,7 @@ import { metaModelAPI } from './api/client'
 import { createMutation } from './api/mutations'
 import { verifyScene } from './api/verify'
 import Scene3D from './components/Scene3D'
+import Scene2D from './components/Scene2D'
 import type { AppState, AppAction, SceneData, Beat } from './types'
 
 const initialState: AppState = {
@@ -280,20 +281,30 @@ export default function App() {
 
                 <div className="relative w-full max-w-5xl h-[65vh] craft-panel flex items-center justify-center p-8 overflow-hidden">
                   <div className="absolute inset-0 border-2 border-white/40 pointer-events-none" />
-                  <Scene3D
-                    beats={beats}
-                    currentBeat={currentBeat}
-                    sabotageBeatIndex={sabotageBeatIndex}
-                    sabotageMode={sabotageMode}
-                    nodes={dslNodes}
-                    activeNodeIds={activeNodeIds}
-                    faultNodeIds={faultNodeIds}
-                    hiddenNodeIds={hiddenNodeIds}
-                    joints={dslJoints}
-                    time={beatTime}
-                    playing
-                    medium={medium}
-                  />
+                  {medium === '2d' ? (
+                    <Scene2D
+                      items={beats}
+                      currentBeat={currentBeat}
+                      sabotageBeatIndex={sabotageBeatIndex}
+                      sabotageMode={sabotageMode}
+                      faultPart={beats[sabotageBeatIndex - 1]?.part ?? null}
+                    />
+                  ) : (
+                    <Scene3D
+                      beats={beats}
+                      currentBeat={currentBeat}
+                      sabotageBeatIndex={sabotageBeatIndex}
+                      sabotageMode={sabotageMode}
+                      nodes={dslNodes}
+                      activeNodeIds={activeNodeIds}
+                      faultNodeIds={faultNodeIds}
+                      hiddenNodeIds={hiddenNodeIds}
+                      joints={dslJoints}
+                      time={beatTime}
+                      playing
+                      medium={medium}
+                    />
+                  )}
                 </div>
 
                 <div className="absolute bottom-8 right-8 z-40 flex flex-col items-center justify-end">

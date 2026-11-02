@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Line, Html } from '@react-three/drei'
+import { OrbitControls, Line, Html, Edges, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import type { DslNode, DslJoint } from '../types'
 
@@ -67,13 +67,18 @@ function PartNode({
   const base = isFault ? '#D55E00' : active ? color : '#1a150c'
   return (
     <group position={position}>
-      <mesh ref={ref}>
+      <mesh ref={ref} castShadow>
         <boxGeometry args={[0.9, 0.9, 0.9]} />
-        <meshStandardMaterial
+        <meshPhysicalMaterial
           color={base}
+          roughness={0.35}
+          metalness={0.6}
+          clearcoat={0.6}
+          clearcoatRoughness={0.25}
           emissive={active || isFault ? base : '#000000'}
           emissiveIntensity={active || isFault ? 0.9 : 0}
         />
+        <Edges linewidth={1} scale={1.02} threshold={15} color="#2c2418" />
       </mesh>
       <Html center distanceFactor={8}>
         <div
@@ -158,27 +163,34 @@ function DslNodeMesh({
     )
   })
   const base = isFault ? '#D55E00' : active ? (node.material.tint || color) : '#1a150c'
+  const isTube = node.type === 'tube'
   return (
     <group
       ref={groupRef}
       position={[node.transform.p[0], node.transform.p[1], node.transform.p[2]]}
       rotation={[node.transform.r[0], node.transform.r[1], node.transform.r[2]]}
     >
-      <mesh ref={meshRef} scale={node.transform.s}>
+      <mesh ref={meshRef} scale={node.transform.s} castShadow>
         {node.type === 'cylinder' ? (
           <cylinderGeometry args={[0.5, 0.5, 1, 24]} />
         ) : node.type === 'plane' ? (
           <planeGeometry args={[1, 1]} />
+        ) : isTube ? (
+          <cylinderGeometry args={[0.5, 0.5, 1, 24, 1, true]} />
         ) : (
           <boxGeometry args={[1, 1, 1]} />
         )}
-        <meshStandardMaterial
+        <meshPhysicalMaterial
           color={base}
           roughness={node.material.roughness ?? 0.5}
           metalness={node.material.metalness ?? 0.6}
+          clearcoat={0.6}
+          clearcoatRoughness={0.25}
+          side={isTube ? THREE.DoubleSide : THREE.FrontSide}
           emissive={active || isFault ? base : '#000000'}
           emissiveIntensity={active || isFault ? 0.9 : 0}
         />
+        <Edges linewidth={1} scale={1.02} threshold={15} color="#2c2418" />
       </mesh>
       <Html center distanceFactor={8}>
         <div
@@ -212,10 +224,7 @@ function Ground() {
   return (
     <>
       <gridHelper args={[12, 12, 0x2c2418, 0x2c2418]} position={[0, -1.2, 0]} />
-      <mesh>
-        <planeGeometry args={[12, 12]} />
-        <meshStandardMaterial color="#1a150c" transparent opacity={0.3} />
-      </mesh>
+      <ContactShadows position={[0, -1.19, 0]} opacity={0.55} blur={2.2} far={4} resolution={512} color="#1a150c" />
     </>
   )
 }
@@ -264,11 +273,21 @@ export default function Scene3D({
       orthographic={isFlat}
       camera={isFlat ? { position: [0, 0, 10], zoom: 60 } : { position: [5, 5, 5], fov: 45 }}
       shadows
+      gl={{ antialias: true }}
+      onCreated={({ gl }) => {
+        gl.toneMapping = THREE.ACESFilmicToneMapping
+        gl.toneMappingExposure = 1.0
+      }}
     >
       <OrbitControls enableZoom={true} enablePan={false} enableRotate={!isFlat} />
-      <ambientLight intensity={0.4} />
-      <pointLight position={[5, 5, 5]} intensity={1} />
-      <directionalLight position={[-3, 5, 3]} intensity={0.6} castShadow />
+      <ambientLight intensity={0.15} />
+      <directionalLight
+        position={[-3, 5, 3]}
+        intensity={1.2}
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+      />
+      <pointLight position={[5, 5, 5]} intensity={0.4} />
       <Ground />
       <ClockRig clockRef={clockRef} time={time} playing={playing} />
       {hasNodes

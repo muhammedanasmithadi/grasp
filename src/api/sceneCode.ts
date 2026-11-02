@@ -282,8 +282,14 @@ function sanitizeNode(
     a.transform && typeof a.transform === "object"
       ? (a.transform as Record<string, unknown>)
       : {};
+  // Model heroes are normalized to hand scale at render; a model
+  // node's own scale only shrinks or explodes them. Force unit scale.
   const p = Array.isArray(t.p) ? t.p : [0, 0, 0];
-  const s = Array.isArray(t.s) ? t.s : [1, 1, 1];
+  const sRaw = Array.isArray(t.s) ? t.s : [1, 1, 1];
+  const sClamped =
+    fn === "model"
+      ? [1, 1, 1]
+      : [clampNum(sRaw[0], 1, 8), clampNum(sRaw[1], 1, 8), clampNum(sRaw[2], 1, 8)];
   const g =
     a.geometry && typeof a.geometry === "object"
       ? (a.geometry as Record<string, unknown>)
@@ -305,7 +311,6 @@ function sanitizeNode(
     : undefined;
   // Cap effective extent: args * scale must fit the 16-unit stage
   // or one slab fills the frame no matter how far the camera pulls back.
-  const sClamped = [clampNum(s[0], 1, 8), clampNum(s[1], 1, 8), clampNum(s[2], 1, 8)];
   let finalArgs = args;
   if (args) {
     const aMax = Math.max(1, ...args.map((v) => Math.abs(Number(v) || 0)));

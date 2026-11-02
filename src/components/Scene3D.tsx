@@ -548,14 +548,37 @@ export default function Scene3D({
     // Frame on subjects, not the stage: a big flat ground plane would
     // shrink everything else to a speck. Ground routinely extends
     // past the frame edge in photography; subjects must not.
-    const isBackdrop = (n: (typeof visibleNodes)[number]): boolean => {
-      if (n.type !== 'plane' && n.type !== 'circle') return false
-      const flat = Math.abs(n.transform.r[0] + Math.PI / 2) < 0.15
+    const yHalf = (n: (typeof visibleNodes)[number]): number => {
       const args = n.geometry?.args
-      const wide =
-        Array.isArray(args) &&
-        args.some((v) => Math.abs(Number(v) || 0) > 8)
-      return flat && wide
+      const ay = Array.isArray(args) && args.length > 1 ? Math.abs(Number(args[1]) || 0) : 1.5
+      return (ay * Math.abs(n.transform.s[1])) / 2
+    }
+    const globalFloor = Math.min(
+      ...visibleNodes.map((n) => n.transform.p[1] - yHalf(n))
+    )
+    const isBackdrop = (n: (typeof visibleNodes)[number]): boolean => {
+      if (n.type === 'plane' || n.type === 'circle') {
+        const flat = Math.abs(n.transform.r[0] + Math.PI / 2) < 0.15
+        const args = n.geometry?.args
+        const wide =
+          Array.isArray(args) &&
+          args.some((v) => Math.abs(Number(v) || 0) > 8)
+        return flat && wide
+      }
+      // Thin flat box slabs sitting on the global floor are stage
+      // grounds, not subjects. Vertical thin boxes (walls) are kept.
+      if (n.type === 'box') {
+        const args = n.geometry?.args
+        if (!Array.isArray(args) || args.length < 3) return false
+        const dims = [0, 1, 2].map(
+          (i) => Math.abs(Number(args[i]) || 0) * Math.abs(n.transform.s[i])
+        )
+        const thinY = dims[1] <= 1.5
+        const wide = Math.max(dims[0], dims[2]) >= 8
+        const onFloor = n.transform.p[1] - dims[1] / 2 <= globalFloor + 1.0
+        return thinY && wide && onFloor
+      }
+      return false
     }
     const subjects =
       visibleNodes.some((n) => !isBackdrop(n)) || !hasNodes

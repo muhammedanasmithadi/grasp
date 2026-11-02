@@ -72,6 +72,10 @@ function reducer(state: AppState, action: AppAction): AppState {
         state.sceneData.dsl.concept.question
       )
       if (!mutation) return state
+      // Jump to the sabotaged beat: breakage appears only in drill
+      // context, never over a beat the student is still learning.
+      const drillIdx =
+        state.sceneData.dsl.beats.findIndex((b) => b.id === mutation.beatId) + 1
       return {
         ...state,
         sabotageMode: true,
@@ -79,6 +83,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         mutatedBecauseOf: mutation.mutatedBecauseOf,
         hiddenNodeIds: mutation.hiddenNodeIds,
         repairStatus: 'idle',
+        currentBeat: drillIdx > 0 ? drillIdx : state.currentBeat,
       }
     }
     case 'REPAIR_ATTEMPT': {
@@ -125,18 +130,20 @@ export default function App() {
   const beats: Beat[] = sceneData?.beats?.length ? sceneData.beats : []
   const beat = beats[currentBeat - 1] || beats[0]
 
-  const rawSabotageBeat = sceneData?.sabotageBeat
-  const sabotageBeatId =
-    typeof rawSabotageBeat === 'object' && rawSabotageBeat !== null
-      ? (rawSabotageBeat as { id: string }).id
-      : rawSabotageBeat
-  const sabotageBeatIndex =
-    beats.findIndex((b) => String(b.id) === String(sabotageBeatId)) + 1
-  const isSabotage = sabotageMode && currentBeat === sabotageBeatIndex
   const lastBeatId = beats.length
   const dslNodes = sceneData?.dsl?.nodes ?? []
   const dslBeats = sceneData?.dsl?.beats
   const currentBeatId = dslBeats?.[currentBeat - 1]?.id
+  // The drilled beat comes from the live mutation, not the stored
+  // sabotageBeat slot.
+  const sabotageBeatIndex =
+    (dslBeats?.findIndex((b) => b.id === mutation?.beatId) ?? -1) + 1
+  const isSabotage = sabotageMode && !!mutation && currentBeatId === mutation.beatId
+  // Fault visuals apply only on the drilled beat. Every other beat
+  // renders the correct scene even mid-drill: broken is for testing,
+  // never for teaching.
+  const onDrillBeat = isSabotage
+  const shownHiddenNodeIds = onDrillBeat ? hiddenNodeIds : []
   const displayedBecauseOf =
     (sabotageMode &&
       currentBeatId &&
@@ -153,6 +160,7 @@ export default function App() {
         : sabotageMode && dslBeats?.[sabotageBeatIndex - 1]?.becauseOf
           ? dslBeats[sabotageBeatIndex - 1].becauseOf
           : []
+  const shownFaultNodeIds = onDrillBeat ? faultNodeIds : []
   const dslJoints = sceneData?.dsl?.joints ?? []
   const beatTime = dslBeats?.[currentBeat - 1]?.t?.[0] ?? (currentBeat - 1) * 6
   const totalDuration = dslBeats?.length
@@ -174,7 +182,7 @@ export default function App() {
     () => (sceneData?.dsl ? verifyScene(sceneData.dsl) : null),
     [sceneData]
   )
-  const badgeLabel = sabotageMode
+  const badgeLabel = onDrillBeat
     ? 'Fault'
     : verification?.badge === 'solver'
       ? 'Solver-verified'
@@ -273,7 +281,7 @@ export default function App() {
                     <div className="text-[10px] font-bold text-slate uppercase tracking-widest">Beat {currentBeat} of {beats.length}</div>
                     <div className="text-lg font-bold text-2c2418 truncate">{beat?.goal || beat?.title}</div>
                   </div>
-                  <div className={`ml-auto inline-flex items-center gap-3 px-4 py-2 border-2 border-a04000 bg-fdeee2 text-[11px] font-bold text-a04000 uppercase tracking-tighter ${sabotageMode ? '' : 'hidden'}`}>
+                  <div className={`ml-auto inline-flex items-center gap-3 px-4 py-2 border-2 border-a04000 bg-fdeee2 text-[11px] font-bold text-a04000 uppercase tracking-tighter ${onDrillBeat ? '' : 'hidden'}`}>
                     <span className="w-3 h-3 bg-a04000 animate-pulse"></span>
                     Fault detected
                   </div>
@@ -297,8 +305,8 @@ export default function App() {
                       sabotageMode={sabotageMode}
                       nodes={dslNodes}
                       activeNodeIds={activeNodeIds}
-                      faultNodeIds={faultNodeIds}
-                      hiddenNodeIds={hiddenNodeIds}
+                      faultNodeIds={shownFaultNodeIds}
+                      hiddenNodeIds={shownHiddenNodeIds}
                       joints={dslJoints}
                       time={beatTime}
                       playing

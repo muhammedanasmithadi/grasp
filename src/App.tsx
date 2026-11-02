@@ -206,66 +206,60 @@ export default function App() {
       </div>
 
       <div className="relative z-10 flex flex-col h-screen w-screen overflow-hidden">
-        <header className="h-20 w-full border-b-2 border-c9ba9e bg-f3efe1 flex items-center px-10 z-30 shrink-0">
+        <header className="h-20 w-full border-b-2 border-c9ba9e bg-f3efe1 flex items-center justify-between px-10 z-30 shrink-0">
           <div className="text-3xl font-black text-2c2418 tracking-wider leading-none">GRASP</div>
+          {screen === 'scene' && (
+            <button className="flex items-center gap-3 px-6 py-3 border-2 border-c9ba9e bg-white text-sm font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all" onClick={() => dispatch({ type: 'RESET' })}>
+              <span className="w-3 h-3 bg-b8860b"></span> New world
+            </button>
+          )}
         </header>
 
         <div className="flex flex-1 overflow-hidden relative">
-          <aside className="w-96 border-r-2 border-c9ba9e bg-f3efe1 flex flex-col z-20">
-            <div className="p-10">
-              <form onSubmit={(e) => { e.preventDefault(); handleAsk() }} className="mb-10">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-[10px] font-bold text-slate tracking-widest">Query</label>
-                  {loading ? (
-                    <div className="text-[10px] font-bold text-b8860b animate-pulse">Generating…</div>
-                  ) : (
-                    <div className="text-[10px] font-bold text-slate">Type · Enter</div>
-                  )}
-                </div>
-                <div className="flex gap-2 items-stretch">
-                  <textarea
-                    rows={3}
-                    placeholder={screen === 'ask' ? 'What would you like to understand?' : `Ask about ${concept?.title}`}
-                    className="input-type flex-1 min-w-0 py-3 text-lg font-light text-2c2418 resize-none"
-                    value={query}
-                    onChange={(e) => dispatch({ type: 'SET_QUERY', payload: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        handleAsk()
-                      }
-                    }}
-                    disabled={loading}
-                  />
-                  <button
-                    type="submit"
-                    className="px-5 border-2 border-b8860b bg-b8860b text-xs font-bold text-white uppercase tracking-widest hover:bg-2c2418 hover:border-2c2418 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={loading || !query.trim()}
-                  >
-                    {loading ? 'Generating…' : 'Go'}
-                  </button>
-                </div>
-              </form>
-              {apiError && (
-                <div className="mt-3 p-3 border-2 border-a04000 bg-fdeee2 text-[10px] font-bold text-a04000 rounded">
-                  API unavailable — {apiError}
-                </div>
-              )}
-              <p className="text-sm text-slate leading-relaxed mt-4 italic">Any mechanism, any concept. Agents reconstruct the causal chain; you learn by repairing what they break.</p>
-            </div>
-
-            <div className="p-8 border-t-2 border-c9ba9e mt-auto">
-              <button className="w-full flex items-center justify-center gap-3 px-6 py-4 border-2 border-c9ba9e bg-white text-base font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all" onClick={() => dispatch({ type: 'RESET' })}>
-                <span className="w-3 h-3 bg-b8860b"></span> New world
-              </button>
-            </div>
-          </aside>
-
           <main className="flex-1 relative bg-f3efe1 flex items-center justify-center p-10">
             {screen === 'ask' && (
-              <div className="flex flex-col items-center justify-center h-full text-slate">
+              <div className="flex flex-col items-center justify-center h-full w-full max-w-xl text-slate">
                 <div className="text-6xl font-black text-2c2418 mb-4">Ask</div>
-                <p className="text-xl font-light">Type any concept and watch it become a moving world.</p>
+                <p className="text-xl font-light mb-10 text-center">Type any concept and watch it become a moving world.</p>
+                <form onSubmit={(e) => { e.preventDefault(); handleAsk() }} className="w-full mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-[10px] font-bold text-slate tracking-widest">Query</label>
+                    {loading ? (
+                      <div className="text-[10px] font-bold text-b8860b animate-pulse">Generating…</div>
+                    ) : (
+                      <div className="text-[10px] font-bold text-slate">Type · Enter</div>
+                    )}
+                  </div>
+                  <div className="flex gap-2 items-stretch">
+                    <textarea
+                      rows={3}
+                      placeholder="What would you like to understand?"
+                      className="input-type flex-1 min-w-0 py-3 text-lg font-light text-2c2418 resize-none"
+                      value={query}
+                      onChange={(e) => dispatch({ type: 'SET_QUERY', payload: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleAsk()
+                        }
+                      }}
+                      disabled={loading}
+                    />
+                    <button
+                      type="submit"
+                      className="px-5 border-2 border-b8860b bg-b8860b text-xs font-bold text-white uppercase tracking-widest hover:bg-2c2418 hover:border-2c2418 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={loading || !query.trim()}
+                    >
+                      {loading ? 'Generating…' : 'Go'}
+                    </button>
+                  </div>
+                </form>
+                {apiError && (
+                  <div className="mt-3 p-3 border-2 border-a04000 bg-fdeee2 text-[10px] font-bold text-a04000 rounded w-full">
+                    API unavailable — {apiError}
+                  </div>
+                )}
+                <p className="text-sm text-slate leading-relaxed mt-4 italic text-center">Any mechanism, any concept. Agents reconstruct the causal chain; you learn by repairing what they break.</p>
               </div>
             )}
             {screen === 'scene' && (

@@ -18,6 +18,10 @@ export class MetaModelAPI {
 
     const lastError: string[] = [];
     const maxRetries = 3;
+    // Output budget per attempt. muse-spark burns ~3k hidden reasoning
+    // tokens before writing, so 8000 fits today's scenes with headroom;
+    // a truncation steps up once instead of retrying the same ceiling.
+    const budgets = [8000, 16000, 16000];
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -45,7 +49,7 @@ Rules: flat arrays only. Every becauseOf references an existing node id. Every b
               },
             ],
             temperature: 0.0,
-            max_tokens: 8000,
+            max_tokens: budgets[Math.min(attempt - 1, budgets.length - 1)],
           }),
         });
 
@@ -57,7 +61,7 @@ Rules: flat arrays only. Every becauseOf references an existing node id. Every b
         const data = await response.json();
 
         if (data.choices?.[0]?.finish_reason === 'length') {
-          throw new Error('E_TRUNCATED: model hit the token ceiling mid-response; raise max_tokens or simplify the prompt');
+          throw new Error('E_TRUNCATED: model hit the token ceiling mid-response; simplify the concept or shorten the prompt');
         }
 
         let content: string;
@@ -78,10 +82,11 @@ Rules: flat arrays only. Every becauseOf references an existing node id. Every b
         const dsl = parseStrictScene(content);
         return adaptDslToScene(dsl);
       } catch (err) {
-        // Truncation is deterministic for a fixed prompt: retrying wastes
-        // credits, so fail fast instead of burning all three attempts.
-        if ((err as Error).message.startsWith('E_TRUNCATED')) throw err;
-        lastError.push(`Attempt ${attempt}: ${(err as Error).message}`);
+        const msg = (err as Error).message;
+        // Truncation at the top budget is deterministic for a fixed prompt:
+        // fail fast instead of burning a third identical call.
+        if (msg.startsWith('E_TRUNCATED') && attempt >= maxRetries) throw err;
+        lastError.push(`Attempt ${attempt}: ${msg}`);
         if (attempt < maxRetries) {
           await new Promise((r) => setTimeout(r, 1000 * attempt));
         }

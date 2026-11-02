@@ -208,7 +208,6 @@ export default function App() {
       <div className="relative z-10 flex flex-col h-screen w-screen overflow-hidden">
         <header className="h-20 w-full border-b-2 border-c9ba9e bg-f3efe1 flex items-center justify-between px-10 z-30 shrink-0">
           <div className="flex items-center gap-6">
-            <div className="w-2 h-12 bg-b8860b" />
             <div className="text-3xl font-black text-2c2418 tracking-wider leading-none">GRASP</div>
           </div>
           <div className="flex items-center gap-8">
@@ -224,28 +223,38 @@ export default function App() {
         <div className="flex flex-1 overflow-hidden relative">
           <aside className="w-96 border-r-2 border-c9ba9e bg-f3efe1 flex flex-col z-20">
             <div className="p-10">
-              <form onSubmit={(e) => { e.preventDefault(); handleAsk() }} className="relative mb-10">
-                <label className="block text-[10px] font-bold text-slate tracking-widest mb-3">Query</label>
-                <input
-                  type="text"
-                  placeholder={screen === 'ask' ? 'What would you like to understand?' : `Ask about ${concept?.title}`}
-                  className="input-type w-full py-4 text-lg font-light text-2c2418"
-                  value={query}
-                  onChange={(e) => dispatch({ type: 'SET_QUERY', payload: e.target.value })}
-                  disabled={loading}
-                />
-                {loading ? (
-                  <div className="absolute right-4 top-4 text-[10px] font-bold text-b8860b animate-pulse">Generating…</div>
-                ) : (
-                  <div className="absolute right-4 top-4 text-[10px] font-bold text-slate">Type · Enter</div>
-                )}
-                <button
-                  type="submit"
-                  className="absolute right-4 bottom-3 h-9 px-4 border-2 border-c9ba9e bg-white text-[10px] font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading || !query.trim()}
-                >
-                  {loading ? 'Generating…' : 'Go'}
-                </button>
+              <form onSubmit={(e) => { e.preventDefault(); handleAsk() }} className="mb-10">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-[10px] font-bold text-slate tracking-widest">Query</label>
+                  {loading ? (
+                    <div className="text-[10px] font-bold text-b8860b animate-pulse">Generating…</div>
+                  ) : (
+                    <div className="text-[10px] font-bold text-slate">Type · Enter</div>
+                  )}
+                </div>
+                <div className="flex gap-2 items-stretch">
+                  <textarea
+                    rows={3}
+                    placeholder={screen === 'ask' ? 'What would you like to understand?' : `Ask about ${concept?.title}`}
+                    className="input-type flex-1 min-w-0 py-3 text-lg font-light text-2c2418 resize-none"
+                    value={query}
+                    onChange={(e) => dispatch({ type: 'SET_QUERY', payload: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleAsk()
+                      }
+                    }}
+                    disabled={loading}
+                  />
+                  <button
+                    type="submit"
+                    className="px-5 border-2 border-b8860b bg-b8860b text-xs font-bold text-white uppercase tracking-widest hover:bg-2c2418 hover:border-2c2418 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={loading || !query.trim()}
+                  >
+                    {loading ? 'Generating…' : 'Go'}
+                  </button>
+                </div>
               </form>
               {apiError && (
                 <div className="mt-3 p-3 border-2 border-a04000 bg-fdeee2 text-[10px] font-bold text-a04000 rounded">

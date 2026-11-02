@@ -1,4 +1,4 @@
-import React, { useReducer, useCallback, useMemo } from 'react'
+import React, { useReducer, useState, useCallback, useMemo } from 'react'
 import { Effect } from 'effect'
 import { metaModelAPI } from './api/client'
 import { createMutation } from './api/mutations'
@@ -103,6 +103,7 @@ function reducer(state: AppState, action: AppAction): AppState {
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const [railTab, setRailTab] = useState<'spine' | 'read' | 'repair'>('spine')
 
   const {
     screen,
@@ -312,7 +313,23 @@ export default function App() {
             )}
           </main>
           {screen === 'scene' && (
-            <aside className="w-[26rem] shrink-0 border-l-2 border-c9ba9e bg-f3efe1 flex flex-col z-20 overflow-y-auto">
+            <aside className="w-[26rem] shrink-0 border-l-2 border-c9ba9e bg-f3efe1 flex flex-col z-20 min-h-0">
+              <div className="shrink-0 flex border-b-2 border-c9ba9e" role="tablist" aria-label="Detail panels">
+                {(['spine', 'read', 'repair'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    role="tab"
+                    aria-selected={railTab === tab}
+                    onClick={() => setRailTab(tab)}
+                    className={`flex-1 px-4 py-3 text-[11px] font-bold uppercase tracking-widest border-r-2 border-c9ba9e last:border-r-0 transition-all ${railTab === tab ? 'bg-2c2418 text-f3efe1' : 'bg-transparent text-slate hover:bg-white'}`}
+                  >
+                    {tab === 'spine' ? 'Spine' : tab === 'read' ? 'Read' : 'Repair'}
+                    {tab === 'repair' && sabotageMode && <span className="ml-2 inline-block w-2 h-2 bg-a04000 animate-pulse"></span>}
+                  </button>
+                ))}
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0">
+              {railTab === 'spine' && (
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest">Causal spine</h3>
@@ -340,21 +357,23 @@ export default function App() {
                     })}
                   </div>
                 </div>
-
-                <div className="p-6 border-t-2 border-c9ba9e">
+              )}
+              {railTab === 'read' && (
+                <div className="p-6">
                   <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest mb-4">Narration</h3>
                   <div className="text-lg text-2c2418 leading-relaxed italic serif fade-in">
                     <span className="drop-cap">{beat?.narration?.[0]}</span>{beat?.narration?.slice(1) || ''}
                   </div>
                   <div className="mt-4 marginalia">{isSabotage ? `Note: The ${beat?.part} beat has a causal fault. Locate the driver.` : 'Follow the causal chain through each beat.'}</div>
                 </div>
-
-                <div className="p-6 border-t-2 border-c9ba9e">
+              )}
+              {railTab === 'repair' && (
+                <div className="p-6">
                   <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest mb-4">Fault drill</h3>
                   {!sabotageMode ? (
                     <button
                       className="w-full flex items-center justify-center gap-3 px-6 py-4 border-2 border-c9ba9e bg-white text-base font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all"
-                      onClick={() => dispatch({ type: 'INTRODUCE_FAULT' })}
+                      onClick={() => { dispatch({ type: 'INTRODUCE_FAULT' }); setRailTab('repair') }}
                     >
                       <span className="w-3 h-3 bg-a04000"></span> Introduce fault
                     </button>
@@ -389,6 +408,8 @@ export default function App() {
                     </div>
                   ) : null}
                 </div>
+              )}
+              </div>
               </aside>
             )}
         </div>

@@ -276,6 +276,29 @@ function sanitizeNode(
   const args = Array.isArray(g?.args)
     ? (g.args as unknown[]).map((v) => clampNum(v, 1, PART_LIMIT))
     : undefined;
+  const radius =
+    typeof g?.radius === "number" && Number.isFinite(g.radius)
+      ? Math.max(0.01, Math.min(2, g.radius))
+      : undefined;
+  const path = Array.isArray(g?.path)
+    ? (g.path as unknown[]).map((pt) =>
+        Array.isArray(pt)
+          ? pt.map((c) => clampNum(c, 0, 30))
+          : pt
+      )
+    : undefined;
+  // Cap effective extent: args * scale must fit the 16-unit stage
+  // or one slab fills the frame no matter how far the camera pulls back.
+  const sClamped = [clampNum(s[0], 1, 8), clampNum(s[1], 1, 8), clampNum(s[2], 1, 8)];
+  let finalArgs = args;
+  if (args) {
+    const aMax = Math.max(1, ...args.map((v) => Math.abs(Number(v) || 0)));
+    const sMax = Math.max(1, ...sClamped.map((v) => Math.abs(v)));
+    if (aMax * sMax > PART_LIMIT) {
+      const f = PART_LIMIT / (aMax * sMax);
+      finalArgs = args.map((v) => (Number(v) || 0) * f);
+    }
+  }
   return {
     ...a,
     type: fn,
@@ -283,10 +306,19 @@ function sanitizeNode(
     transform: {
       p: [clampNum(p[0], 0), clampNum(p[1], 0), clampNum(p[2], 0)],
       r: Array.isArray(t.r) ? t.r : [0, 0, 0],
-      s: [clampNum(s[0], 1, 8), clampNum(s[1], 1, 8), clampNum(s[2], 1, 8)],
+      s: sClamped,
     },
     material: a.material ?? DEFAULT_MATERIAL,
-    ...(g ? { geometry: { ...g, ...(args ? { args } : {}) } } : {}),
+    ...(g
+      ? {
+          geometry: {
+            ...g,
+            ...(finalArgs ? { args: finalArgs } : {}),
+            ...(radius !== undefined ? { radius } : {}),
+            ...(path ? { path } : {}),
+          },
+        }
+      : {}),
   };
 }
 

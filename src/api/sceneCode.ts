@@ -4,7 +4,9 @@
 // them into a SceneDsl, which then goes through validateSceneDsl as usual.
 //
 // Grammar (one statement per line, `#` comments and blank lines ignored):
-//   box({...}) | cylinder({...}) | tube({...}) | plane({...})
+//   box | cylinder | sphere | cone | torus | torusKnot | tetrahedron |
+//   octahedron | dodecahedron | icosahedron | capsule | circle | ring |
+//   tube | plane | model | points  (each called as name({...}))
 //   hinge({...}) | slider({...}) | gear({...})
 //   beat({...}) | concept({...}) | theme({...}) | camera({...})
 //   for NAME in range(A, B) {
@@ -25,13 +27,30 @@ type Stmt =
   | { kind: "call"; fn: string; arg: unknown; line: number }
   | { kind: "for"; varName: string; from: number; to: number; body: Stmt[]; line: number };
 
+const NODE_CALLS = new Set([
+  "box",
+  "cylinder",
+  "sphere",
+  "cone",
+  "torus",
+  "torusKnot",
+  "tetrahedron",
+  "octahedron",
+  "dodecahedron",
+  "icosahedron",
+  "capsule",
+  "circle",
+  "ring",
+  "tube",
+  "plane",
+  "model",
+  "points",
+]);
+
 const CALL_NAMES = new Set([
   "concept",
   "theme",
-  "box",
-  "cylinder",
-  "tube",
-  "plane",
+  ...NODE_CALLS,
   "hinge",
   "slider",
   "gear",
@@ -252,8 +271,21 @@ function execCall(
         break;
       case "box":
       case "cylinder":
+      case "sphere":
+      case "cone":
+      case "torus":
+      case "torusKnot":
+      case "tetrahedron":
+      case "octahedron":
+      case "dodecahedron":
+      case "icosahedron":
+      case "capsule":
+      case "circle":
+      case "ring":
       case "tube":
       case "plane":
+      case "model":
+      case "points":
         builder.nodes.push({
           parent: a.parent ?? null,
           transform: a.transform ?? DEFAULT_TRANSFORM,

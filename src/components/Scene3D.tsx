@@ -1,7 +1,8 @@
-import React, { useRef, useEffect } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Line, Html, Edges, ContactShadows } from '@react-three/drei'
+import React, { useRef, useEffect, useMemo, Suspense } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { OrbitControls, Line, Html, Edges, ContactShadows, Gltf } from '@react-three/drei'
 import * as THREE from 'three'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { DslNode, DslJoint } from '../types'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
@@ -32,6 +33,23 @@ function ClockRig({
   useFrame((_, delta) => {
     if (playing) clockRef.current += delta
   })
+  return null
+}
+
+/** Procedural image-based lighting. No HDR download needed. */
+function EnvRig() {
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl)
+    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+    scene.environment = env
+    return () => {
+      scene.environment = null
+      env.dispose()
+      pmrem.dispose()
+    }
+  }, [gl, scene])
   return null
 }
 
@@ -101,6 +119,74 @@ function PartNode({
   )
 }
 
+function useTubeGeometry(path: [number, number, number][] | undefined, radius: number) {
+  return useMemo(() => {
+    if (!path || path.length < 2) return null
+    const pts = path.map((p) => new THREE.Vector3(p[0], p[1], p[2]))
+    const curve = new THREE.CatmullRomCurve3(pts)
+    return new THREE.TubeGeometry(curve, 32, radius, 12, false)
+  }, [path ? JSON.stringify(path) : '', radius])
+}
+
+function PointsCloud({ count, size, color }: { count: number; size: number; color: string }) {
+  const positions = useMemo(() => {
+    const arr = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) {
+      arr[i * 3] = (Math.random() - 0.5) * 2
+      arr[i * 3 + 1] = (Math.random() - 0.5) * 2
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 2
+    }
+    return arr
+  }, [count])
+  return (
+    <points>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={0.9} />
+    </points>
+  )
+}
+
+function GeometryFor({ node }: { node: import('../types').DslNode }) {
+  const g = node.geometry ?? {}
+  const args = g.args
+  switch (node.type) {
+    case 'cylinder':
+      return <cylinderGeometry args={(args as [number, number, number, number]) ?? [0.5, 0.5, 1, 24]} />
+    case 'sphere':
+      return <sphereGeometry args={(args as [number, number, number]) ?? [0.5, 32, 32]} />
+    case 'cone':
+      return <coneGeometry args={(args as [number, number, number]) ?? [0.5, 1, 24]} />
+    case 'torus':
+      return <torusGeometry args={(args as [number, number, number, number]) ?? [0.5, 0.2, 16, 32]} />
+    case 'torusKnot':
+      return <torusKnotGeometry args={(args as [number, number, number, number]) ?? [0.5, 0.15, 64, 16]} />
+    case 'tetrahedron':
+      return <tetrahedronGeometry args={(args as [number]) ?? [0.7]} />
+    case 'octahedron':
+      return <octahedronGeometry args={(args as [number]) ?? [0.7]} />
+    case 'dodecahedron':
+      return <dodecahedronGeometry args={(args as [number]) ?? [0.7]} />
+    case 'icosahedron':
+      return <icosahedronGeometry args={(args as [number]) ?? [0.7]} />
+    case 'capsule':
+      return <capsuleGeometry args={(args as [number, number, number, number]) ?? [0.3, 1, 8, 16]} />
+    case 'circle':
+      return <circleGeometry args={(args as [number, number]) ?? [0.5, 32]} />
+    case 'ring':
+      return <ringGeometry args={(args as [number, number, number]) ?? [0.3, 0.5, 32]} />
+    case 'plane':
+      return <planeGeometry args={(args as [number, number]) ?? [1, 1]} />
+    case 'tube':
+      // Plain tube without a path renders as an open cylinder; pathed
+      // tubes are handled by TubeMesh below.
+      return <cylinderGeometry args={[0.5, 0.5, 1, 24, 1, true]} />
+    default:
+      return <boxGeometry args={(args as [number, number, number]) ?? [1, 1, 1]} />
+  }
+}
+
 function DslNodeMesh({
   node,
   active,
@@ -119,7 +205,7 @@ function DslNodeMesh({
   const groupRef = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null!)
   useFrame((state) => {
-    if (!groupRef.current || !meshRef.current) return
+    if (!groupRef.current) return
     const t = clockRef.current
     let rx = node.transform.r[0]
     let ry = node.transform.r[1]
@@ -156,42 +242,77 @@ function DslNodeMesh({
     )
     groupRef.current.rotation.set(rx, ry, rz)
     const pulse = active ? 1 + 0.08 * Math.sin(state.clock.elapsedTime * 3) : 1
-    meshRef.current.scale.set(
-      node.transform.s[0] * pulse,
-      node.transform.s[1] * pulse,
-      node.transform.s[2] * pulse
-    )
+    if (meshRef.current) {
+      meshRef.current.scale.set(
+        node.transform.s[0] * pulse,
+        node.transform.s[1] * pulse,
+        node.transform.s[2] * pulse
+      )
+    }
   })
   const base = isFault ? '#D55E00' : active ? (node.material.tint || color) : '#1a150c'
   const isTube = node.type === 'tube'
+  const tubeGeo = useTubeGeometry(
+    node.type === 'tube' ? (node.geometry?.path as [number, number, number][] | undefined) : undefined,
+    node.geometry?.radius ?? 0.15
+  )
+  const isModel = node.type === 'model' && !!node.geometry?.url
+  const isPoints = node.type === 'points'
   return (
     <group
       ref={groupRef}
       position={[node.transform.p[0], node.transform.p[1], node.transform.p[2]]}
       rotation={[node.transform.r[0], node.transform.r[1], node.transform.r[2]]}
     >
+      {isModel ? (
+        <Suspense fallback={null}>
+          <Gltf src={node.geometry!.url!} scale={node.transform.s} castShadow />
+        </Suspense>
+      ) : isPoints ? (
+        <group scale={node.transform.s}>
+          <PointsCloud
+            count={Math.min(node.geometry?.count ?? 300, 5000)}
+            size={node.geometry?.size ?? 0.08}
+            color={base}
+          />
+        </group>
+      ) : isTube && tubeGeo ? (
+        <mesh ref={meshRef} scale={node.transform.s} castShadow geometry={tubeGeo}>
+          <meshPhysicalMaterial
+            color={base}
+            roughness={node.material.roughness ?? 0.5}
+            metalness={node.material.metalness ?? 0.6}
+            clearcoat={node.material.clearcoat ?? 0.6}
+            clearcoatRoughness={node.material.clearcoatRoughness ?? 0.25}
+            transmission={node.material.transmission ?? 0}
+            ior={node.material.ior ?? 1.5}
+            transparent={node.material.transparent ?? (node.material.opacity ?? 1) < 1}
+            opacity={node.material.opacity ?? 1}
+            side={THREE.DoubleSide}
+            emissive={active || isFault ? (node.material.emissive ?? base) : '#000000'}
+            emissiveIntensity={active || isFault ? 0.9 : 0}
+          />
+        </mesh>
+      ) : (
       <mesh ref={meshRef} scale={node.transform.s} castShadow>
-        {node.type === 'cylinder' ? (
-          <cylinderGeometry args={[0.5, 0.5, 1, 24]} />
-        ) : node.type === 'plane' ? (
-          <planeGeometry args={[1, 1]} />
-        ) : isTube ? (
-          <cylinderGeometry args={[0.5, 0.5, 1, 24, 1, true]} />
-        ) : (
-          <boxGeometry args={[1, 1, 1]} />
-        )}
+        <GeometryFor node={node} />
         <meshPhysicalMaterial
           color={base}
           roughness={node.material.roughness ?? 0.5}
           metalness={node.material.metalness ?? 0.6}
-          clearcoat={0.6}
-          clearcoatRoughness={0.25}
-          side={isTube ? THREE.DoubleSide : THREE.FrontSide}
-          emissive={active || isFault ? base : '#000000'}
+          clearcoat={node.material.clearcoat ?? 0.6}
+          clearcoatRoughness={node.material.clearcoatRoughness ?? 0.25}
+          transmission={node.material.transmission ?? 0}
+          ior={node.material.ior ?? 1.5}
+          transparent={node.material.transparent ?? (node.material.opacity ?? 1) < 1}
+          opacity={node.material.opacity ?? 1}
+          side={isTube || node.type === 'plane' || node.type === 'circle' || node.type === 'ring' ? THREE.DoubleSide : THREE.FrontSide}
+          emissive={active || isFault ? (node.material.emissive ?? base) : '#000000'}
           emissiveIntensity={active || isFault ? 0.9 : 0}
         />
         <Edges linewidth={1} scale={1.02} threshold={15} color="#2c2418" />
       </mesh>
+      )}
       <Html center distanceFactor={8}>
         <div
           style={{
@@ -289,6 +410,7 @@ export default function Scene3D({
       />
       <pointLight position={[5, 5, 5]} intensity={0.4} />
       <Ground />
+      <EnvRig />
       <ClockRig clockRef={clockRef} time={time} playing={playing} />
       {hasNodes
         ? visibleNodes.map((n, i) => (

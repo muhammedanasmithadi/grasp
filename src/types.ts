@@ -30,7 +30,24 @@ export interface Concept {
 
 export type Vec3 = [number, number, number];
 
-export type PrimitiveType = 'box' | 'cylinder' | 'tube' | 'plane';
+export type PrimitiveType =
+  | 'box'
+  | 'cylinder'
+  | 'sphere'
+  | 'cone'
+  | 'torus'
+  | 'torusKnot'
+  | 'tetrahedron'
+  | 'octahedron'
+  | 'dodecahedron'
+  | 'icosahedron'
+  | 'capsule'
+  | 'circle'
+  | 'ring'
+  | 'tube'
+  | 'plane'
+  | 'model'
+  | 'points';
 
 export type JointType = 'hinge' | 'slider' | 'gear';
 
@@ -44,6 +61,22 @@ export interface DslMaterial {
   roughness: number;
   metalness: number;
   tint: string;
+  clearcoat?: number;
+  clearcoatRoughness?: number;
+  transmission?: number;
+  ior?: number;
+  emissive?: string;
+  opacity?: number;
+  transparent?: boolean;
+}
+
+export interface DslGeometry {
+  args?: number[];
+  path?: Vec3[];
+  radius?: number;
+  url?: string;
+  count?: number;
+  size?: number;
 }
 
 export interface DslNode {
@@ -54,6 +87,7 @@ export interface DslNode {
   transform: DslTransform;
   material: DslMaterial;
   label: string;
+  geometry?: DslGeometry;
 }
 
 export interface DslDriver {

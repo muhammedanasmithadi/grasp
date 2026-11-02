@@ -2,7 +2,31 @@ import { Effect } from "effect";
 import type { SceneDsl } from "../types";
 import { ValidationError } from "./errors";
 
-const PRIMITIVES = new Set(["box", "cylinder", "tube", "plane"]);
+const PRIMITIVES = new Set([
+  "box",
+  "cylinder",
+  "sphere",
+  "cone",
+  "torus",
+  "torusKnot",
+  "tetrahedron",
+  "octahedron",
+  "dodecahedron",
+  "icosahedron",
+  "capsule",
+  "circle",
+  "ring",
+  "tube",
+  "plane",
+  "model",
+  "points",
+]);
+
+const MODEL_URL_ALLOWLIST = [
+  "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/",
+  "https://github.com/KhronosGroup/glTF-Sample-Assets/",
+  "https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Assets@",
+];
 const JOINTS = new Set(["hinge", "slider", "gear"]);
 const MEDIUMS = new Set(["3d", "2d", "hybrid"]);
 
@@ -60,6 +84,47 @@ export const validateSceneDsl = (
         return yield* fail(
           `E_NODE_TYPE: unknown primitive "${String(n.type)}" on node "${n.id}"`
         );
+      }
+      const geo = (n as Record<string, unknown>).geometry as
+        | Record<string, unknown>
+        | undefined;
+      if (n.type === "model") {
+        const url = geo?.url;
+        if (typeof url !== "string" || !url) {
+          return yield* fail(
+            `E_NODE_MODEL_URL: node "${n.id}" of type "model" needs geometry.url`
+          );
+        }
+        if (!MODEL_URL_ALLOWLIST.some((prefix) => url.startsWith(prefix))) {
+          return yield* fail(
+            `E_NODE_MODEL_URL: node "${n.id}" url must be a Khronos sample-asset URL`
+          );
+        }
+      }
+      if (n.type === "points" && geo?.count !== undefined) {
+        const count = geo.count as unknown;
+        if (typeof count !== "number" || count < 1 || count > 5000) {
+          return yield* fail(
+            `E_NODE_POINTS: node "${n.id}" geometry.count must be 1..5000`
+          );
+        }
+      }
+      if (n.type === "tube" && geo?.path !== undefined) {
+        const path = geo.path as unknown;
+        if (
+          !Array.isArray(path) ||
+          path.length < 2 ||
+          !path.every(
+            (p) =>
+              Array.isArray(p) &&
+              p.length === 3 &&
+              p.every((v) => typeof v === "number")
+          )
+        ) {
+          return yield* fail(
+            `E_NODE_TUBE_PATH: node "${n.id}" geometry.path must be 2+ [x,y,z] points`
+          );
+        }
       }
     }
 

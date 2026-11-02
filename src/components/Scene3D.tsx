@@ -126,12 +126,61 @@ function PartNode({
   )
 }
 
+function taperedRadius(t: number): number {
+  // Hoses and winds swell mid-run and neck down where they meet ports.
+  return 0.25 + 0.75 * Math.pow(Math.sin(Math.PI * t), 0.5)
+}
+
+function makeTaperedTube(
+  points: THREE.Vector3[],
+  radius: number,
+  tubularSegments = 48,
+  radialSegments = 12
+): THREE.BufferGeometry {
+  const curve = new THREE.CatmullRomCurve3(points)
+  const frames = curve.computeFrenetFrames(tubularSegments, false)
+  const positions: number[] = []
+  const normals: number[] = []
+  const uvs: number[] = []
+  const indices: number[] = []
+  for (let i = 0; i <= tubularSegments; i++) {
+    const t = i / tubularSegments
+    const p = curve.getPointAt(t)
+    const r = radius * taperedRadius(t)
+    const N = frames.normals[Math.min(i, tubularSegments - 1)]
+    const B = frames.binormals[Math.min(i, tubularSegments - 1)]
+    for (let j = 0; j <= radialSegments; j++) {
+      const v = (j / radialSegments) * Math.PI * 2
+      const sin = Math.sin(v)
+      const cos = Math.cos(v)
+      const nx = cos * N.x + sin * B.x
+      const ny = cos * N.y + sin * B.y
+      const nz = cos * N.z + sin * B.z
+      positions.push(p.x + r * nx, p.y + r * ny, p.z + r * nz)
+      normals.push(nx, ny, nz)
+      uvs.push(t, j / radialSegments)
+    }
+  }
+  for (let i = 0; i < tubularSegments; i++) {
+    for (let j = 0; j < radialSegments; j++) {
+      const a = i * (radialSegments + 1) + j
+      const b = a + radialSegments + 1
+      indices.push(a, b, a + 1, b, b + 1, a + 1)
+    }
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geo.setIndex(indices)
+  return geo
+}
+
 function useTubeGeometry(path: [number, number, number][] | undefined, radius: number) {
   return useMemo(() => {
     if (!path || path.length < 2) return null
     const pts = path.map((p) => new THREE.Vector3(p[0], p[1], p[2]))
-    const curve = new THREE.CatmullRomCurve3(pts)
-    return new THREE.TubeGeometry(curve, 32, radius, 12, false)
+    return makeTaperedTube(pts, radius)
   }, [path ? JSON.stringify(path) : '', radius])
 }
 

@@ -11,8 +11,6 @@ const initialState: AppState = {
   concept: null,
   sceneData: null,
   currentBeat: 1,
-  rpm: 60,
-  gravity: 9.8,
   sabotageMode: false,
   showMastery: false,
   masteryDelta: null,
@@ -63,10 +61,6 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, currentBeat: action.payload }
     case 'FINISH':
       return { ...state, showMastery: true }
-    case 'SET_RPM':
-      return { ...state, rpm: action.payload }
-    case 'SET_GRAVITY':
-      return { ...state, gravity: action.payload }
     case 'TOGGLE_SABOTAGE':
       return { ...state, sabotageMode: !state.sabotageMode }
     case 'INTRODUCE_FAULT': {
@@ -114,8 +108,6 @@ export default function App() {
     concept,
     sceneData,
     currentBeat,
-    rpm,
-    gravity,
     sabotageMode,
     showMastery,
     masteryDelta,
@@ -298,8 +290,6 @@ export default function App() {
                   <Scene3D
                     beats={beats}
                     currentBeat={currentBeat}
-                    rpm={rpm}
-                    gravity={gravity}
                     sabotageBeatIndex={sabotageBeatIndex}
                     sabotageMode={sabotageMode}
                     nodes={dslNodes}
@@ -409,40 +399,6 @@ export default function App() {
                       )}
                     </div>
                   ) : null}
-                </div>
-
-                <div className="p-10 border-t-2 border-c9ba9e">
-                  <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest mb-5">Earned controls</h3>
-                  <div className="space-y-6">
-                    <div>
-                      <div className="flex justify-between text-[11px] font-bold text-slate uppercase tracking-widest mb-2">
-                        <span>RPM</span>
-                        <span className="text-b8860b font-mono font-bold">{rpm}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="240"
-                        value={rpm}
-                        className="w-full range-slider"
-                        onChange={(e) => dispatch({ type: 'SET_RPM', payload: parseInt(e.target.value, 10) })}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[11px] font-bold text-slate uppercase tracking-widest mb-2">
-                        <span>Gravity</span>
-                        <span className="text-e69f00 font-mono font-bold">{gravity}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="20"
-                        value={gravity}
-                        className="w-full range-slider"
-                        onChange={(e) => dispatch({ type: 'SET_GRAVITY', payload: parseFloat(e.target.value) })}
-                      />
-                    </div>
-                  </div>
                 </div>
 
                 <div className="mt-auto p-10 border-t-2 border-c9ba9e">

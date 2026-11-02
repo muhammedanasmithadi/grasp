@@ -223,8 +223,6 @@ function Ground() {
 interface Scene3DProps {
   beats: { id: string | number; title: string; part: string }[]
   currentBeat: number
-  rpm: number
-  gravity: number
   sabotageBeatIndex: number
   sabotageMode: boolean
   nodes?: DslNode[]
@@ -240,8 +238,6 @@ interface Scene3DProps {
 export default function Scene3D({
   beats,
   currentBeat,
-  rpm,
-  gravity,
   sabotageBeatIndex,
   sabotageMode,
   nodes,

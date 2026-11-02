@@ -146,8 +146,6 @@ export interface AppState {
   concept: Concept | null;
   sceneData: SceneData | null;
   currentBeat: number;
-  rpm: number;
-  gravity: number;
   sabotageMode: boolean;
   showMastery: boolean;
   masteryDelta: number | null;
@@ -167,8 +165,6 @@ export type AppAction =
   | { type: 'NEXT_BEAT' }
   | { type: 'SET_BEAT'; payload: number }
   | { type: 'FINISH' }
-  | { type: 'SET_RPM'; payload: number }
-  | { type: 'SET_GRAVITY'; payload: number }
   | { type: 'TOGGLE_SABOTAGE' }
   | { type: 'INTRODUCE_FAULT' }
   | { type: 'REPAIR_ATTEMPT'; payload: { nodeId: string } }

@@ -389,32 +389,6 @@ export default function App() {
                     </div>
                   ) : null}
                 </div>
-
-                <div className="mt-auto p-6 border-t-2 border-c9ba9e">
-                  {!showMastery ? (
-                    <button
-                      className="w-full flex items-center justify-center gap-3 px-6 py-4 border-2 border-c9ba9e bg-white text-base font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all"
-                      onClick={nextBeat}
-                    >
-                      <span className="w-3 h-3 bg-b8860b"></span>
-                      {currentBeat === lastBeatId ? 'Finish' : 'Next'}
-                    </button>
-                  ) : (
-                    <div className="craft-panel p-6">
-                      <div className="flex items-center gap-3 mb-3">
-                        <span className="w-3 h-3 bg-deepGreen"></span>
-                        <span className="text-sm font-bold text-deepGreen uppercase tracking-wider">Teach-back complete</span>
-                      </div>
-                      <div className="text-3xl font-black text-b8860b font-mono">+{masteryDelta ?? 0}%</div>
-                      <div className="mt-3 text-sm text-slate">
-                        Your understanding of this mechanism improved by {masteryDelta ?? 0}%.
-                      </div>
-                      <button className="mt-4 btn-text" onClick={() => dispatch({ type: 'RESET' })}>
-                        Try another concept
-                      </button>
-                    </div>
-                  )}
-                </div>
               </aside>
             )}
         </div>
@@ -451,6 +425,22 @@ export default function App() {
               <div className="text-[10px] font-mono text-slate uppercase tracking-widest whitespace-nowrap">
                 Beat {currentBeat} of {beats.length} · {medium}
               </div>
+              {!showMastery ? (
+                <button
+                  className="ml-auto shrink-0 flex items-center gap-3 px-6 py-2 border-2 border-b8860b bg-b8860b text-sm font-bold text-white uppercase tracking-widest hover:bg-2c2418 hover:border-2c2418 transition-all"
+                  onClick={nextBeat}
+                >
+                  <span className="w-3 h-3 bg-white"></span>
+                  {currentBeat === lastBeatId ? 'Finish' : 'Next'}
+                </button>
+              ) : (
+                <div className="ml-auto shrink-0 flex items-center gap-3">
+                  <span className="text-[11px] font-bold text-deepGreen uppercase tracking-widest">Teach-back complete +{masteryDelta ?? 0}%</span>
+                  <button className="btn-text" onClick={() => dispatch({ type: 'RESET' })}>
+                    Try another concept
+                  </button>
+                </div>
+              )}
             </footer>
           )}
       </div>

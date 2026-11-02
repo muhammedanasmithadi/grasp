@@ -6,7 +6,7 @@
 import type { SceneData, SceneDsl } from "../types";
 import { validateSceneDsl } from "./validateDsl";
 
-function findSceneJSON(text: string): string {
+export function findSceneJSON(text: string): string {
   if (!text || typeof text !== "string") {
     throw new Error("E_EMPTY_INPUT: scene response has no text content");
   }

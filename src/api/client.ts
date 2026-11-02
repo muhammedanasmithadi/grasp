@@ -1,4 +1,5 @@
-import { parseStrictScene, adaptDslToScene } from './parser';
+import { parseSceneCode } from './sceneCode';
+import { adaptDslToScene } from './parser';
 import type { SceneData } from '../types';
 
 const API_BASE = (import.meta as unknown as Record<string, { VITE_META_API_BASE?: string; VITE_META_API_KEY?: string }>).env?.VITE_META_API_BASE || 'https://api.meta.ai/v1';
@@ -32,12 +33,22 @@ export class MetaModelAPI {
             messages: [
               {
                 role: 'system',
-                content: `You generate a strict Scene DSL v0 JSON object. Infer the mechanism from the user prompt. Output ONLY valid raw JSON. No prose. No markdown.
+                content: `You generate a 3D teaching scene by writing calls to a fixed builder API. Infer the mechanism from the user prompt. Output ONLY code, one call per line. No prose. No markdown. No JSON.
 
-Schema:
-{"dslVersion":"0.1","concept":{"question":"string","medium":"3d|2d|hybrid","mediumWhy":"string","verification":"solver|sourced|sketch"},"theme":{"motif":"string","palette":"okabe-ito","keyAzimuth":135},"nodes":[{"id":"string","type":"box|cylinder|tube|plane","parent":"string|null","transform":{"p":[0,0,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#E69F00"},"label":"string"}],"joints":[{"id":"string","type":"hinge|slider|gear","a":"string","b":"string","anchor":[0,0,0],"axis":[0,0,1],"range":[0,360],"driver":{"kind":"time","rpm":30}}],"flows":[],"camera":{"axisOfAction":[0,1,0],"shots":[{"t":0,"size":"wide","target":"node-id","move":"orbit-in"}]},"beats":[{"id":"string","t":[0,6],"goal":"string","becauseOf":["node-id"],"probe":{"kind":"trace","prompt":"string","answer":"node-id"},"narration":"string"}],"audio":{"layers":["ambience","mech"]}}
+Available calls (args are strict JSON objects):
+concept({"question":"...","medium":"3d|2d|hybrid","mediumWhy":"...","verification":"solver|sketch"})
+theme({"motif":"...","palette":"okabe-ito","keyAzimuth":135})
+box|cylinder|tube|plane({"id":"...","parent":null,"transform":{"p":[0,0,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#E69F00"},"label":"..."})
+hinge|slider|gear({"id":"...","a":"node-id","b":"node-id","anchor":[0,0,0],"axis":[0,0,1],"range":[0,360],"driver":{"kind":"time","rpm":30}})
+beat({"id":"...","t":[0,6],"goal":"...","becauseOf":["node-id"],"probe":{"kind":"trace","prompt":"...","answer":"node-id"},"narration":"..."})
+camera({"axisOfAction":[0,1,0],"shots":[{"t":0,"size":"wide","target":"node-id","move":"orbit-in"}]})
 
-Rules: flat arrays only. Every becauseOf references an existing node id. Every beat has exactly one probe whose answer is a node id. Use 3-8 beats. Choose medium by rule: spatial parts that occlude -> 3d with non-uniform scales; sequence/data/abstraction -> 2d; cutaway plus live trace -> hybrid. Vary primitive types: cylinders for shafts, pistons, rods, wheels and bars; boxes for housings and blocks; planes for ground or backdrops; tubes for pipes and coils. Never use boxes for everything. Set concept.verification honestly: "solver" only if motion matches a closed-form formula, else "sketch". Never claim "sourced". Output ONLY the JSON object.`,
+Loops for repeated parts:
+for i in range(0, 12) {
+box({"id":"bar-$i","parent":null,"transform":{"p":[{"$i":[-8,1.5]},-0.3,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.1,"tint":"#0072B2"},"label":"bar"})
+}
+
+Rules: "$i" in a string becomes the index. {"$i":[base,step]} in a numeric slot becomes base+i*step. Every becauseOf references an existing node id. Every beat has exactly one probe whose answer is a node id. Use 3-8 beats. Vary primitives: cylinders for shafts, pistons, rods, wheels and bars; boxes for housings and blocks; planes for ground or backdrops; tubes for pipes and coils. Never use boxes for everything. Set verification honestly: "solver" only if motion matches a closed-form formula, else "sketch". Never claim "sourced". Output ONLY the code.`,
               },
               {
                 role: 'user',
@@ -75,7 +86,7 @@ Rules: flat arrays only. Every becauseOf references an existing node id. Every b
 
         console.log('[MetaModelAPI] raw content:', content?.slice(0, 500));
 
-        const dsl = parseStrictScene(content);
+        const dsl = parseSceneCode(content);
         return adaptDslToScene(dsl);
       } catch (err) {
         // Truncation is deterministic for a fixed prompt: retrying wastes

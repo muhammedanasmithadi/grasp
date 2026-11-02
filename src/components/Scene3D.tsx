@@ -20,6 +20,8 @@ const LABEL_STYLE: React.CSSProperties = {
   pointerEvents: 'none',
 }
 
+import { getGrainTexture } from './procedural'
+
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
 function layoutPositions(count: number): THREE.Vector3[] {
@@ -106,6 +108,9 @@ function PartNode({
           color={base}
           roughness={0.35}
           metalness={0.6}
+          roughnessMap={getGrainTexture()}
+          bumpMap={getGrainTexture()}
+          bumpScale={0.02}
           clearcoat={0.6}
           clearcoatRoughness={0.25}
           emissive={active || isFault ? base : '#000000'}
@@ -286,6 +291,9 @@ function DslNodeMesh({
             color={base}
             roughness={node.material.roughness ?? 0.5}
             metalness={node.material.metalness ?? 0.6}
+            roughnessMap={getGrainTexture()}
+            bumpMap={getGrainTexture()}
+            bumpScale={0.02}
             clearcoat={node.material.clearcoat ?? 0.6}
             clearcoatRoughness={node.material.clearcoatRoughness ?? 0.25}
             transmission={node.material.transmission ?? 0}
@@ -304,6 +312,9 @@ function DslNodeMesh({
           color={base}
           roughness={node.material.roughness ?? 0.5}
           metalness={node.material.metalness ?? 0.6}
+          roughnessMap={getGrainTexture()}
+          bumpMap={getGrainTexture()}
+          bumpScale={0.02}
           clearcoat={node.material.clearcoat ?? 0.6}
           clearcoatRoughness={node.material.clearcoatRoughness ?? 0.25}
           transmission={node.material.transmission ?? 0}

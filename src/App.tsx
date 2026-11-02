@@ -1,5 +1,7 @@
-import React, { useReducer, useCallback } from 'react'
+import React, { useReducer, useCallback, useMemo } from 'react'
 import { metaModelAPI } from './api/client'
+import { createMutation } from './api/mutations'
+import { verifyScene } from './api/verify'
 import Scene3D from './components/Scene3D'
 import type { AppState, AppAction, SceneData, Beat } from './types'
 
@@ -11,11 +13,15 @@ const initialState: AppState = {
   currentBeat: 1,
   rpm: 60,
   gravity: 9.8,
-  sabotageMode: true,
+  sabotageMode: false,
   showMastery: false,
   masteryDelta: null,
   loading: false,
   apiError: null,
+  mutation: null,
+  mutatedBecauseOf: {},
+  hiddenNodeIds: [],
+  repairStatus: 'idle',
 }
 
 function reducer(state: AppState, action: AppAction): AppState {
@@ -36,9 +42,13 @@ function reducer(state: AppState, action: AppAction): AppState {
         sceneData: action.payload,
         screen: 'scene',
         currentBeat: 1,
-        sabotageMode: true,
+        sabotageMode: false,
         showMastery: false,
         masteryDelta: null,
+        mutation: null,
+        mutatedBecauseOf: {},
+        hiddenNodeIds: [],
+        repairStatus: 'idle',
       }
     case 'ASK_FAILURE':
       return {
@@ -48,7 +58,9 @@ function reducer(state: AppState, action: AppAction): AppState {
         screen: 'ask',
       }
     case 'NEXT_BEAT':
-      return { ...state, currentBeat: state.currentBeat + 1 }
+      return { ...state, currentBeat: Math.min(state.currentBeat + 1, state.sceneData?.beats?.length ?? state.currentBeat + 1) }
+    case 'SET_BEAT':
+      return { ...state, currentBeat: action.payload }
     case 'FINISH':
       return { ...state, showMastery: true }
     case 'SET_RPM':
@@ -57,6 +69,35 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, gravity: action.payload }
     case 'TOGGLE_SABOTAGE':
       return { ...state, sabotageMode: !state.sabotageMode }
+    case 'INTRODUCE_FAULT': {
+      if (!state.sceneData?.dsl) return state
+      const mutation = createMutation(
+        state.sceneData.dsl,
+        state.sceneData.dsl.concept.question
+      )
+      if (!mutation) return state
+      return {
+        ...state,
+        sabotageMode: true,
+        mutation,
+        mutatedBecauseOf: mutation.mutatedBecauseOf,
+        hiddenNodeIds: mutation.hiddenNodeIds,
+        repairStatus: 'idle',
+      }
+    }
+    case 'REPAIR_ATTEMPT': {
+      if (!state.mutation) return state
+      const correct = action.payload.nodeId === state.mutation.probe.answer
+      return { ...state, repairStatus: correct ? 'correct' : 'wrong' }
+    }
+    case 'RESOLVE_FAULT':
+      return {
+        ...state,
+        sabotageMode: false,
+        mutatedBecauseOf: {},
+        hiddenNodeIds: [],
+        repairStatus: 'idle',
+      }
     case 'RESET':
       return initialState
     default:
@@ -80,6 +121,10 @@ export default function App() {
     masteryDelta,
     loading,
     apiError,
+    mutation,
+    mutatedBecauseOf,
+    hiddenNodeIds,
+    repairStatus,
   } = state
 
   const beats: Beat[] = sceneData?.beats?.length ? sceneData.beats : []
@@ -94,6 +139,51 @@ export default function App() {
     beats.findIndex((b) => String(b.id) === String(sabotageBeatId)) + 1
   const isSabotage = sabotageMode && currentBeat === sabotageBeatIndex
   const lastBeatId = beats.length
+  const dslNodes = sceneData?.dsl?.nodes ?? []
+  const dslBeats = sceneData?.dsl?.beats
+  const currentBeatId = dslBeats?.[currentBeat - 1]?.id
+  const displayedBecauseOf =
+    (sabotageMode &&
+      currentBeatId &&
+      mutatedBecauseOf[currentBeatId]) ||
+    dslBeats?.[currentBeat - 1]?.becauseOf ||
+    []
+  const activeNodeIds = displayedBecauseOf
+  const faultBeatId = mutation?.beatId
+  const faultNodeIds =
+    sabotageMode && faultBeatId && mutatedBecauseOf[faultBeatId]
+      ? mutatedBecauseOf[faultBeatId]
+      : sabotageMode && mutation
+        ? [mutation.probe.answer]
+        : sabotageMode && dslBeats?.[sabotageBeatIndex - 1]?.becauseOf
+          ? dslBeats[sabotageBeatIndex - 1].becauseOf
+          : []
+  const dslJoints = sceneData?.dsl?.joints ?? []
+  const beatTime = dslBeats?.[currentBeat - 1]?.t?.[0] ?? (currentBeat - 1) * 6
+  const totalDuration = dslBeats?.length
+    ? dslBeats[dslBeats.length - 1]?.t?.[1] ?? dslBeats.length * 6
+    : beats.length * 6
+  const seekToTime = useCallback(
+    (t: number) => {
+      if (!dslBeats?.length) {
+        return
+      }
+      let idx = dslBeats.findIndex((b) => t >= b.t[0] && t < b.t[1])
+      if (idx === -1) idx = t >= totalDuration ? dslBeats.length - 1 : 0
+      dispatch({ type: 'SET_BEAT', payload: idx + 1 })
+    },
+    [dslBeats, totalDuration]
+  )
+  const medium = sceneData?.dsl?.concept?.medium ?? '3d'
+  const verification = useMemo(
+    () => (sceneData?.dsl ? verifyScene(sceneData.dsl) : null),
+    [sceneData]
+  )
+  const badgeLabel = sabotageMode
+    ? 'Fault'
+    : verification?.badge === 'solver'
+      ? 'Solver-verified'
+      : 'Sketch'
 
   const handleAsk = useCallback(async () => {
     if (!query.trim()) return
@@ -212,22 +302,32 @@ export default function App() {
                     gravity={gravity}
                     sabotageBeatIndex={sabotageBeatIndex}
                     sabotageMode={sabotageMode}
+                    nodes={dslNodes}
+                    activeNodeIds={activeNodeIds}
+                    faultNodeIds={faultNodeIds}
+                    hiddenNodeIds={hiddenNodeIds}
+                    joints={dslJoints}
+                    time={beatTime}
+                    playing
+                    medium={medium}
                   />
                 </div>
 
                 <div className="absolute bottom-8 right-8 z-40 flex flex-col items-center justify-end">
-                  <div className="relative w-4 h-[60%]">
-                    <div className="rule-vertical w-full bg-c9ba9e absolute left-1/2 -translate-x-1/2 h-full" />
-                    <div className="rule-fill w-full h={[(currentBeat - 1) / (beats.length - 1)] * 100}% absolute bottom-0 left-0" />
-                    <div
-                      className="absolute left-1/2 -translate-x-1/2 top={100 - ((currentBeat - 1) / (beats.length - 1)) * 100}% w-6 h-6 rounded-full border-3 border-b8860b bg-white shadow-[0_0_10px_rgba(0,0,0,0.3)] cursor-pointer"
-                      onClick={nextBeat}
-                    />
-                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={totalDuration}
+                    step={0.1}
+                    value={beatTime}
+                    className="w-48 range-slider"
+                    onChange={(e) => seekToTime(parseFloat(e.target.value))}
+                    aria-label="Scrub timeline"
+                  />
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-[10px] font-mono text-slate">0s</span>
                     <div className="w-1 h-1 bg-slate"></div>
-                    <span className="text-[10px] font-mono text-slate">{beats.length * 15}s</span>
+                    <span className="text-[10px] font-mono text-slate">{totalDuration}s</span>
                   </div>
                 </div>
               </>
@@ -237,7 +337,7 @@ export default function App() {
                 <div className="p-10">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest">Causal spine</h3>
-                    <span className={`inline-flex items-center gap-2 px-3 py-1 border-2 ${sabotageMode ? 'border-a04000 bg-fdeee2 text-a04000' : 'border-009e73 bg-009e73/5 text-009e73'} text-[10px] font-bold uppercase tracking-tighter`}>{sabotageMode ? 'Fault' : 'Verified'}</span>
+                    <span className={`inline-flex items-center gap-2 px-3 py-1 border-2 ${sabotageMode ? 'border-a04000 bg-fdeee2 text-a04000' : verification?.badge === 'solver' ? 'border-009e73 bg-009e73/5 text-009e73' : 'border-c9ba9e bg-white text-slate'} text-[10px] font-bold uppercase tracking-tighter`}>{badgeLabel}</span>
                   </div>
                   <div className="space-y-4">
                     {(sceneData?.causalSpine ?? beats.map((b, i) => ({
@@ -268,6 +368,47 @@ export default function App() {
                     <span className="drop-cap">{beat?.narration?.[0]}</span>{beat?.narration?.slice(1) || ''}
                   </div>
                   <div className="mt-4 marginalia">{isSabotage ? `Note: The ${beat?.part} beat has a causal fault. Locate the driver.` : 'Follow the causal chain through each beat.'}</div>
+                </div>
+
+                <div className="p-10 border-t-2 border-c9ba9e">
+                  <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest mb-4">Fault drill</h3>
+                  {!sabotageMode ? (
+                    <button
+                      className="w-full flex items-center justify-center gap-3 px-6 py-4 border-2 border-c9ba9e bg-white text-base font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all"
+                      onClick={() => dispatch({ type: 'INTRODUCE_FAULT' })}
+                    >
+                      <span className="w-3 h-3 bg-a04000"></span> Introduce fault
+                    </button>
+                  ) : mutation ? (
+                    <div className="craft-panel p-6 border-a04000 bg-fdeee2">
+                      <div className="text-[10px] font-bold text-a04000 uppercase tracking-widest mb-2">
+                        {mutation.mutationId} · {mutation.kind.replace('_', ' ')}
+                      </div>
+                      <div className="text-lg font-bold text-2c2418 mb-4">{mutation.probe.prompt}</div>
+                      <div className="space-y-2">
+                        {dslNodes.map((n) => (
+                          <button
+                            key={n.id}
+                            className="w-full text-left px-4 py-3 border-2 border-c9ba9e bg-white text-[11px] font-bold text-2c2418 uppercase tracking-widest hover:border-b8860b transition-all"
+                            onClick={() => dispatch({ type: 'REPAIR_ATTEMPT', payload: { nodeId: n.id } })}
+                          >
+                            {n.label}
+                          </button>
+                        ))}
+                      </div>
+                      {repairStatus === 'correct' && (
+                        <div className="mt-4">
+                          <div className="text-[11px] font-bold text-deepGreen uppercase tracking-widest mb-3">Fault located — scene repaired</div>
+                          <button className="btn-text w-full" onClick={() => dispatch({ type: 'RESOLVE_FAULT' })}>
+                            Restore correct scene
+                          </button>
+                        </div>
+                      )}
+                      {repairStatus === 'wrong' && (
+                        <div className="mt-4 text-[11px] font-bold text-a04000 uppercase tracking-widest">Not that part — try again</div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="p-10 border-t-2 border-c9ba9e">
@@ -337,12 +478,12 @@ export default function App() {
                   <div className="text-[10px] font-bold text-slate uppercase tracking-widest">Pre/post mastery delta</div>
                   <div className="flex items-center gap-3 text-[11px] font-bold text-deepGreen uppercase tracking-tighter">
                     <span className="w-3 h-3 bg-009e73"></span>
-                    <span>Solver-verified</span>
+                    <span>{badgeLabel}</span>
                   </div>
                   <div className="text-[11px] font-mono font-bold text-b8860b">+{masteryDelta ?? 0}%</div>
                 </div>
                 <div className="text-[10px] font-mono text-slate uppercase tracking-widest">
-                  Beat {currentBeat} of {beats.length}
+                  Beat {currentBeat} of {beats.length} · {medium}
                 </div>
               </footer>
             )}

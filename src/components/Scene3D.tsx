@@ -1,184 +1,213 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Line } from '@react-three/drei'
+import { OrbitControls, Line, Html } from '@react-three/drei'
 import * as THREE from 'three'
+import type { DslNode, DslJoint } from '../types'
 
-const COLORS = {
-  crankshaft: '#b8860b',
-  connectingRod: '#e69f00',
-  piston: '#009e73',
-  camshaft: '#009e73',
-  valve: '#a04000',
+const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
+
+function layoutPositions(count: number): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = []
+  const spacing = 1.7
+  const offset = ((count - 1) * spacing) / 2
+  for (let i = 0; i < count; i++) {
+    pts.push(new THREE.Vector3(i * spacing - offset, -0.3, 0))
+  }
+  return pts
 }
 
-/** Cached world positions so CausalLines can draw between parts. */
-const positions = {
-  crankPin: new THREE.Vector3(-1.92, -0.6, 0),
-  pistonPin: new THREE.Vector3(1.0, -0.6, 0),
-  valve: new THREE.Vector3(3.1, -0.6, 0),
-}
-
-/** Rotating crankshaft with a crank pin on its edge. */
-function Crankshaft({ rpm, active, sabotage }: { rpm: number; active: boolean; sabotage: boolean }) {
-  const ref = useRef<THREE.Group>(null!)
-  useFrame((state, delta) => {
-    if (!ref.current) return
-    ref.current.rotation.z += (delta * (rpm / 60)) * Math.PI * 2
-
-    // Track crank pin world position
-    const pinLocal = new THREE.Vector3(0.28, 0, 0)
-    pinLocal.applyMatrix4(ref.current.matrixWorld)
-    positions.crankPin.copy(pinLocal)
+/** Master clock inside the Canvas. Advances shared time; seeks when `time` changes. */
+function ClockRig({
+  clockRef,
+  time,
+  playing,
+}: {
+  clockRef: React.MutableRefObject<number>
+  time: number
+  playing: boolean
+}) {
+  useEffect(() => {
+    clockRef.current = time
+  }, [time, clockRef])
+  useFrame((_, delta) => {
+    if (playing) clockRef.current += delta
   })
+  return null
+}
+
+function axisDominant(axis: [number, number, number]): 'x' | 'y' | 'z' {
+  const ax = Math.abs(axis[0])
+  const ay = Math.abs(axis[1])
+  const az = Math.abs(axis[2])
+  if (az >= ax && az >= ay) return 'z'
+  if (ay >= ax) return 'y'
+  return 'x'
+}
+
+function PartNode({
+  position,
+  label,
+  color,
+  active,
+  isFault,
+}: {
+  position: THREE.Vector3
+  label: string
+  color: string
+  active: boolean
+  isFault: boolean
+}) {
+  const ref = useRef<THREE.Mesh>(null!)
+  useFrame((state) => {
+    if (!ref.current) return
+    const t = state.clock.elapsedTime
+    const s = active ? 1 + 0.08 * Math.sin(t * 3) : 1
+    ref.current.scale.setScalar(s)
+  })
+  const base = isFault ? '#D55E00' : active ? color : '#1a150c'
   return (
-    <group ref={ref} position={[-2.2, -0.6, 0]}>
-      <mesh>
-        <cylinderGeometry args={[0.22, 0.22, 1.2]} />
+    <group position={position}>
+      <mesh ref={ref}>
+        <boxGeometry args={[0.9, 0.9, 0.9]} />
         <meshStandardMaterial
-          color={active ? COLORS.crankshaft : '#1a150c'}
-          emissive={active ? COLORS.crankshaft : '#000000'}
-          emissiveIntensity={active ? 1 : 0}
+          color={base}
+          emissive={active || isFault ? base : '#000000'}
+          emissiveIntensity={active || isFault ? 0.9 : 0}
         />
       </mesh>
-      <mesh position={[0.28, 0, 0]}>
-        <sphereGeometry args={[0.11, 16, 16]} />
-        <meshStandardMaterial color={sabotage ? COLORS.valve : COLORS.crankshaft} />
-      </mesh>
+      <Html center distanceFactor={8}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: '#2c2418',
+            background: '#fdfaf0',
+            border: '1px solid #c9ba9e',
+            padding: '2px 6px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {label}
+        </div>
+      </Html>
     </group>
   )
 }
 
-/** Connecting rod: pinned to crank pin on one end, piston pin on the other. */
-function ConnectingRod({ active }: { active: boolean }) {
-  const ref = useRef<THREE.Mesh>(null!)
-  const rodLength = 1.2
-  const crankRadius = 0.28
-
-  useFrame((state, delta) => {
-    if (!ref.current) return
-
-    const pinX = positions.crankPin.x
-    const pinY = positions.crankPin.y
-
-    // Reconstruct crank angle from pin position
-    const theta = Math.atan2(pinY, pinX)
-
-    const sinTheta = Math.sin(theta)
-    const underRoot = rodLength * rodLength - crankRadius * crankRadius * sinTheta * sinTheta
-    const pistonX = crankRadius * Math.cos(theta) + Math.sqrt(Math.max(0, underRoot))
-
-    positions.pistonPin.set(pistonX, 0, 0)
-
-    const mx = (pinX + pistonX) / 2
-    const my = (pinY + 0) / 2
-    const dist = Math.hypot(pistonX - pinX, 0 - pinY)
-    const angle = Math.atan2(0 - pinY, pistonX - pinX)
-
-    ref.current.position.set(mx, my, 0)
-    ref.current.rotation.z = angle
-    ref.current.scale.set(1, dist / 1.6, 1)
-  })
-
-  return (
-    <mesh ref={ref}>
-      <boxGeometry args={[0.06, 1.6, 0.06]} />
-      <meshStandardMaterial
-        color={active ? COLORS.connectingRod : '#1a150c'}
-        emissive={active ? COLORS.connectingRod : '#000000'}
-      />
-    </mesh>
-  )
-}
-
-/** Piston: translates back and forth along the X axis. */
-function Piston({ active }: { active: boolean }) {
-  const ref = useRef<THREE.Mesh>(null!)
-  useFrame(() => {
-    if (ref.current) {
-      ref.current.position.copy(positions.pistonPin)
+function DslNodeMesh({
+  node,
+  active,
+  isFault,
+  color,
+  joints,
+  clockRef,
+}: {
+  node: DslNode
+  active: boolean
+  isFault: boolean
+  color: string
+  joints: DslJoint[]
+  clockRef: React.MutableRefObject<number>
+}) {
+  const groupRef = useRef<THREE.Group>(null!)
+  const meshRef = useRef<THREE.Mesh>(null!)
+  useFrame((state) => {
+    if (!groupRef.current || !meshRef.current) return
+    const t = clockRef.current
+    let rx = node.transform.r[0]
+    let ry = node.transform.r[1]
+    let rz = node.transform.r[2]
+    let ox = 0
+    let oy = 0
+    let oz = 0
+    for (const j of joints) {
+      const rpm = j.driver?.rpm ?? 30
+      const omega = ((rpm / 60) * Math.PI * 2 * t) % (Math.PI * 2)
+      if (j.type === 'slider') {
+        const span = j.range[1] - j.range[0]
+        const amp = span / 2
+        const off = amp * Math.sin(omega)
+        const len = Math.hypot(j.axis[0], j.axis[1], j.axis[2]) || 1
+        ox += (j.axis[0] / len) * off
+        oy += (j.axis[1] / len) * off
+        oz += (j.axis[2] / len) * off
+      } else {
+        // hinge + gear: rotate around dominant axis within range
+        const spanDeg = j.range[1] - j.range[0]
+        const span = (spanDeg * Math.PI) / 180
+        const a = j.range[0] * (Math.PI / 180) + ((omega / (Math.PI * 2)) % 1) * (span === 0 ? Math.PI * 2 : span)
+        const dom = axisDominant(j.anchor && j.axis ? j.axis : [0, 0, 1])
+        if (dom === 'x') rx += a
+        else if (dom === 'y') ry += a
+        else rz += a
+      }
     }
+    groupRef.current.position.set(
+      node.transform.p[0] + ox,
+      node.transform.p[1] + oy,
+      node.transform.p[2] + oz
+    )
+    groupRef.current.rotation.set(rx, ry, rz)
+    const pulse = active ? 1 + 0.08 * Math.sin(state.clock.elapsedTime * 3) : 1
+    meshRef.current.scale.set(
+      node.transform.s[0] * pulse,
+      node.transform.s[1] * pulse,
+      node.transform.s[2] * pulse
+    )
   })
+  const base = isFault ? '#D55E00' : active ? (node.material.tint || color) : '#1a150c'
   return (
-    <mesh ref={ref} position={positions.pistonPin}>
-      <boxGeometry args={[0.9, 1.4, 0.6]} />
-      <meshStandardMaterial
-        color={active ? COLORS.piston : '#1a150c'}
-        emissive={active ? COLORS.piston : '#000000'}
-      />
-    </mesh>
-  )
-}
-
-/** Camshaft: rotating with an eccentric lobe at half crank speed. */
-function Camshaft({ rpm, active }: { rpm: number; active: boolean }) {
-  const ref = useRef<THREE.Group>(null!)
-  useFrame((state, delta) => {
-    if (!ref.current) return
-    ref.current.rotation.z += (delta * (rpm / 60)) * Math.PI * 2 * 0.5
-  })
-  return (
-    <group ref={ref} position={[2.6, -0.6, 0]}>
-      <mesh>
-        <cylinderGeometry args={[0.18, 0.18, 0.9]} />
-        <meshStandardMaterial color={active ? COLORS.camshaft : '#1a150c'} />
+    <group
+      ref={groupRef}
+      position={[node.transform.p[0], node.transform.p[1], node.transform.p[2]]}
+      rotation={[node.transform.r[0], node.transform.r[1], node.transform.r[2]]}
+    >
+      <mesh ref={meshRef} scale={node.transform.s}>
+        {node.type === 'cylinder' ? (
+          <cylinderGeometry args={[0.5, 0.5, 1, 24]} />
+        ) : node.type === 'plane' ? (
+          <planeGeometry args={[1, 1]} />
+        ) : (
+          <boxGeometry args={[1, 1, 1]} />
+        )}
+        <meshStandardMaterial
+          color={base}
+          roughness={node.material.roughness ?? 0.5}
+          metalness={node.material.metalness ?? 0.6}
+          emissive={active || isFault ? base : '#000000'}
+          emissiveIntensity={active || isFault ? 0.9 : 0}
+        />
       </mesh>
-      <mesh position={[0.22, 0, 0]}>
-        <boxGeometry args={[0.5, 0.18, 0.5]} />
-        <meshStandardMaterial color="#a04000" />
-      </mesh>
+      <Html center distanceFactor={8}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: '#2c2418',
+            background: '#fdfaf0',
+            border: '1px solid #c9ba9e',
+            padding: '2px 6px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {node.label}
+        </div>
+      </Html>
     </group>
   )
 }
 
-/** Valve: lifts when the cam lobe pushes it. */
-function Valve({ rpm, active, sabotage }: { rpm: number; active: boolean; sabotage: boolean }) {
-  const ref = useRef<THREE.Mesh>(null!)
-  const [lift, setLift] = useState(0)
-
-  useFrame((state, delta) => {
-    if (!ref.current) return
-
-    // Track cam angle (half crank speed) for lobe timing
-    // We approximate cam angle from time since we don't have access to crank angle here
-    const camAngle = (state as any).elapsedTime * (rpm / 60) * Math.PI
-    const lobePush = Math.max(0, Math.sin(camAngle))
-    const push = sabotage ? -lobePush : lobePush
-    const newLift = push * 0.5
-
-    setLift(newLift)
-    ref.current.position.y = newLift
-    ref.current.scale.z = 1 + newLift * 0.3
-
-    positions.valve.set(3.1, -0.6 + newLift, 0)
-  })
-  return (
-    <group position={[3.1, -0.6, 0]}>
-      <mesh ref={ref}>
-        <boxGeometry args={[0.12, 0.6, 0.12]} />
-        <meshStandardMaterial color={active ? COLORS.valve : '#1a150c'} />
-      </mesh>
-      <mesh position={[0, -0.45, 0]}>
-        <boxGeometry args={[0.14, 0.1, 0.14]} />
-        <meshStandardMaterial color="#1a150c" />
-      </mesh>
-    </group>
-  )
+function CausalLines({ points }: { points: THREE.Vector3[] }) {
+  if (points.length < 2) return null
+  const flat: number[] = []
+  points.forEach((p) => flat.push(p.x, p.y, p.z))
+  return <Line points={flat} color="#c9ba9e" linewidth={2} dashed={true} dashScale={0.8} />
 }
 
-/** Draws dashed causal connection line from crank → rod → piston → cam → valve. */
-function CausalLines() {
-  const points = [
-    -2.2, -0.6, 0,
-    -1.92, -0.6, 0,
-    1.0, -0.6, 0,
-    2.6, -0.6, 0,
-    3.1, -0.6, 0,
-  ]
-
-  return <Line points={points} color="#c9ba9e" linewidth={2} dashed={true} dashScale={0.8} />
-}
-
-/** Ground plane + grid. */
 function Ground() {
   return (
     <>
@@ -198,6 +227,14 @@ interface Scene3DProps {
   gravity: number
   sabotageBeatIndex: number
   sabotageMode: boolean
+  nodes?: DslNode[]
+  activeNodeIds?: string[]
+  faultNodeIds?: string[]
+  hiddenNodeIds?: string[]
+  joints?: DslJoint[]
+  time?: number
+  playing?: boolean
+  medium?: '3d' | '2d' | 'hybrid'
 }
 
 export default function Scene3D({
@@ -207,24 +244,60 @@ export default function Scene3D({
   gravity,
   sabotageBeatIndex,
   sabotageMode,
+  nodes,
+  activeNodeIds = [],
+  faultNodeIds = [],
+  hiddenNodeIds = [],
+  joints = [],
+  time = 0,
+  playing = true,
+  medium = '3d',
 }: Scene3DProps) {
-  const isSabotage = sabotageMode && currentBeat === sabotageBeatIndex
-  const activeBeat = beats[currentBeat - 1]
+  const clockRef = useRef<number>(time)
+  if (beats.length === 0) return null
+  const hasNodes = !!nodes && nodes.length > 0
+  const isFlat = medium === '2d'
+  const visibleNodes = hasNodes ? nodes!.filter((n) => !hiddenNodeIds.includes(n.id)) : []
+  const positions = hasNodes
+    ? visibleNodes.map((n) => new THREE.Vector3(n.transform.p[0], n.transform.p[1], n.transform.p[2]))
+    : layoutPositions(beats.length)
+  const jointsByNode = (id: string): DslJoint[] => joints.filter((j) => j.b === id)
 
   return (
-    <Canvas camera={{ position: [5, 5, 5], fov: 45 }} shadows>
-      <OrbitControls enableZoom={true} enablePan={false} />
+    <Canvas
+      orthographic={isFlat}
+      camera={isFlat ? { position: [0, 0, 10], zoom: 60 } : { position: [5, 5, 5], fov: 45 }}
+      shadows
+    >
+      <OrbitControls enableZoom={true} enablePan={false} enableRotate={!isFlat} />
       <ambientLight intensity={0.4} />
       <pointLight position={[5, 5, 5]} intensity={1} />
       <directionalLight position={[-3, 5, 3]} intensity={0.6} castShadow />
       <Ground />
-
-      <Crankshaft rpm={rpm} active={currentBeat === 1} sabotage={isSabotage} />
-      <ConnectingRod active={currentBeat === 2} />
-      <Piston active={currentBeat >= 4} />
-      <Camshaft rpm={rpm} active={currentBeat === 3} />
-      <Valve rpm={rpm} active={currentBeat === 3} sabotage={isSabotage} />
-      <CausalLines />
+      <ClockRig clockRef={clockRef} time={time} playing={playing} />
+      {hasNodes
+        ? visibleNodes.map((n, i) => (
+            <DslNodeMesh
+              key={n.id}
+              node={n}
+              color={PALETTE[i % PALETTE.length]}
+              active={activeNodeIds.includes(n.id)}
+              isFault={sabotageMode && faultNodeIds.includes(n.id)}
+              joints={jointsByNode(n.id)}
+              clockRef={clockRef}
+            />
+          ))
+        : beats.map((b, i) => (
+            <PartNode
+              key={String(b.id)}
+              position={positions[i]}
+              label={b.part || b.title}
+              color={PALETTE[i % PALETTE.length]}
+              active={i + 1 === currentBeat}
+              isFault={sabotageMode && i + 1 === sabotageBeatIndex}
+            />
+          ))}
+      <CausalLines points={positions} />
     </Canvas>
   )
 }

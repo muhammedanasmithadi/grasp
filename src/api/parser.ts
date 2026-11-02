@@ -1,13 +1,14 @@
 // src/api/parser.ts
-// Extracts and validates JSON from the API response.
-// Nemotron returns natural language with embedded JSON, or JSON with
+// Extracts and validates JSON from the Meta Model API response.
+// The model may return natural language with embedded JSON, or JSON with
 // different field names. We try multiple strategies to find valid scene data.
 
-import type { SceneData, Beat } from '../types';
+import type { SceneData, SceneDsl } from '../types';
+import { validateSceneDsl } from './validateDsl';
 
 function findSceneJSON(text: string): string {
   if (!text || typeof text !== 'string') {
-    throw new Error('Invalid scene response: no text content');
+    throw new Error('E_EMPTY_INPUT: scene response has no text content');
   }
 
   // Strategy 1: Try the entire text as JSON
@@ -55,7 +56,7 @@ function findSceneJSON(text: string): string {
     }
   }
 
-  throw new Error('No valid scene JSON found in response');
+  throw new Error('E_NO_SCENE_JSON: no valid scene JSON found in response');
 }
 
 function isValidScene(data: unknown): data is Record<string, unknown> {
@@ -69,9 +70,9 @@ function isValidScene(data: unknown): data is Record<string, unknown> {
   const hasBeats =
     Array.isArray(d.beats) ||
     Array.isArray(d.main_components) ||
-    Array.isArray(data.parts) ||
-    Array.isArray(data.key_components) ||
-    Array.isArray(data.components);
+    Array.isArray(d.parts) ||
+    Array.isArray(d.key_components) ||
+    Array.isArray(d.components);
   return hasTitle && hasBeats;
 }
 
@@ -155,11 +156,11 @@ function normalizeScene(data: Record<string, unknown>) {
 
 function validateScene(data: unknown): SceneData {
   if (!data || typeof data !== 'object') {
-    throw new Error('Invalid scene response: not an object');
+    throw new Error('E_SCENE_NOT_OBJECT: scene response is not an object');
   }
   const d = data as Record<string, unknown>;
   if (!d.title && !d.name && !d.topic && !d.concept) {
-    throw new Error('Invalid scene response: missing title');
+    throw new Error('E_SCENE_NO_TITLE: scene response is missing title');
   }
   if (
     !Array.isArray(d.beats) &&
@@ -168,7 +169,7 @@ function validateScene(data: unknown): SceneData {
     !Array.isArray(d.key_components) &&
     !Array.isArray(d.components)
   ) {
-    throw new Error('Invalid scene response: missing beats array');
+    throw new Error('E_SCENE_NO_BEATS: scene response is missing beats array');
   }
 
   return normalizeScene(d) as SceneData;
@@ -181,10 +182,46 @@ export function parseSceneResponse(text: string): SceneData {
   try {
     parsed = JSON.parse(jsonText);
   } catch (err) {
-    throw new Error(`Failed to parse scene JSON: ${(err as Error).message}`);
+    throw new Error(`E_JSON_PARSE: ${(err as Error).message}`);
   }
 
   console.log('[MetaModelAPI] parsed JSON:', JSON.stringify(parsed).slice(0, 500));
 
   return validateScene(parsed);
+}
+
+export function parseStrictScene(text: string): SceneDsl {
+  const jsonText = findSceneJSON(text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (err) {
+    throw new Error(`E_JSON_PARSE: ${(err as Error).message}`);
+  }
+  return validateSceneDsl(parsed);
+}
+
+export function adaptDslToScene(dsl: SceneDsl): SceneData {
+  const labelOf = (id: string): string => {
+    const n = dsl.nodes.find((x) => x.id === id);
+    return n ? n.label : id;
+  };
+  const beats = dsl.beats.map((b, i) => ({
+    id: String(b.id ?? `b${i + 1}`),
+    title: String(b.goal ?? `Beat ${i + 1}`),
+    goal: String(b.goal ?? ''),
+    narration: String(b.narration ?? ''),
+    part: labelOf(b.becauseOf[0] ?? dsl.nodes[0]?.id ?? `part-${i}`),
+  }));
+  return {
+    title: dsl.concept.question,
+    beats,
+    sabotageBeat: '',
+    causalSpine: beats.map((b, i) => ({
+      part: b.part,
+      action: i < beats.length - 1 ? 'drives' : 'completes',
+      nextPart: beats[i + 1]?.part ?? 'end',
+    })),
+    dsl,
+  };
 }

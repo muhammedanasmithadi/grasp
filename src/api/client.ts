@@ -1,7 +1,7 @@
-import { parseSceneResponse } from './parser';
+import { parseStrictScene, adaptDslToScene } from './parser';
 import type { SceneData } from '../types';
 
-const API_BASE = (import.meta as unknown as Record<string, { VITE_META_API_BASE?: string; VITE_META_API_KEY?: string }>).env?.VITE_META_API_BASE || '/api';
+const API_BASE = (import.meta as unknown as Record<string, { VITE_META_API_BASE?: string; VITE_META_API_KEY?: string }>).env?.VITE_META_API_BASE || 'https://api.meta.ai/v1';
 const API_KEY = (import.meta as unknown as Record<string, { VITE_META_API_BASE?: string; VITE_META_API_KEY?: string }>).env?.VITE_META_API_KEY || '';
 
 export class MetaModelAPI {
@@ -13,7 +13,7 @@ export class MetaModelAPI {
 
   async generateScene(concept: string): Promise<SceneData> {
     if (!API_KEY) {
-      throw new Error('No API key configured. Set VITE_META_API_KEY in .env');
+      throw new Error('E_NO_API_KEY: no API key configured; set VITE_META_API_KEY in .env');
     }
 
     const lastError: string[] = [];
@@ -28,23 +28,16 @@ export class MetaModelAPI {
             Authorization: `Bearer ${API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
+            model: 'muse-spark-1.3',
             messages: [
               {
                 role: 'system',
-                content: `You are a JSON generator. Output ONLY valid raw JSON. NO prose. No markdown. No explanation. NO text before or after the JSON. Just a single JSON object.
+                content: `You generate a strict Scene DSL v0 JSON object. Infer the mechanism from the user prompt. Output ONLY valid raw JSON. No prose. No markdown.
 
 Schema:
-{
-  "title": "string - human-readable concept title",
-  "beats": [
-    { "id": "string", "title": "string", "goal": "string", "narration": "string", "part": "string" }
-  ],
-  "sabotageBeat": "string",
-  "causalSpine": [ { "part": "string", "action": "string", "nextPart": "string" } ]
-}
+{"dslVersion":"0.1","concept":{"question":"string","medium":"3d|2d|hybrid","mediumWhy":"string","verification":"solver|sourced|sketch"},"theme":{"motif":"string","palette":"okabe-ito","keyAzimuth":135},"nodes":[{"id":"string","type":"box|cylinder|tube|plane","parent":"string|null","transform":{"p":[0,0,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#E69F00"},"label":"string"}],"joints":[{"id":"string","type":"hinge|slider|gear","a":"string","b":"string","anchor":[0,0,0],"axis":[0,0,1],"range":[0,360],"driver":{"kind":"time","rpm":30}}],"flows":[],"camera":{"axisOfAction":[0,1,0],"shots":[{"t":0,"size":"wide","target":"node-id","move":"orbit-in"}]},"beats":[{"id":"string","t":[0,6],"goal":"string","becauseOf":["node-id"],"probe":{"kind":"trace","prompt":"string","answer":"node-id"},"narration":"string"}],"audio":{"layers":["ambience","mech"]}}
 
-Include exactly 4-6 beats. One beat has a subtle causal fault. Output ONLY the JSON object - nothing else.`,
+Rules: flat arrays only. Every becauseOf references an existing node id. Every beat has exactly one probe whose answer is a node id. Use 3-8 beats. Choose medium by rule: spatial parts that occlude -> 3d with non-uniform scales; sequence/data/abstraction -> 2d; cutaway plus live trace -> hybrid. Set concept.verification honestly: "solver" only if motion matches a closed-form formula, else "sketch". Never claim "sourced". Output ONLY the JSON object.`,
               },
               {
                 role: 'user',
@@ -58,17 +51,14 @@ Include exactly 4-6 beats. One beat has a subtle causal fault. Output ONLY the J
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`API error (${response.status}): ${errorText.slice(0, 200)}`);
+          throw new Error(`E_API_HTTP: API error (${response.status}): ${errorText.slice(0, 200)}`);
         }
 
         const data = await response.json();
 
         let content: string;
         if (data.choices && data.choices[0] && data.choices[0].message) {
-          content =
-            data.choices[0].message.content ??
-            data.choices[0].message.reasoning_content ??
-            '';
+          content = data.choices[0].message.content ?? '';
         } else if (typeof data === 'string') {
           content = data;
         } else {
@@ -76,12 +66,13 @@ Include exactly 4-6 beats. One beat has a subtle causal fault. Output ONLY the J
         }
 
         if (!content) {
-          throw new Error('Empty response from API');
+          throw new Error('E_EMPTY_RESPONSE: empty response from API');
         }
 
         console.log('[MetaModelAPI] raw content:', content?.slice(0, 500));
 
-        return parseSceneResponse(content);
+        const dsl = parseStrictScene(content);
+        return adaptDslToScene(dsl);
       } catch (err) {
         lastError.push(`Attempt ${attempt}: ${(err as Error).message}`);
         if (attempt < maxRetries) {
@@ -90,7 +81,7 @@ Include exactly 4-6 beats. One beat has a subtle causal fault. Output ONLY the J
       }
     }
 
-    throw new Error(`API failed after ${maxRetries} attempts: ${lastError.join(' | ')}`);
+    throw new Error(`E_API_RETRIES_EXCEEDED: API failed after ${maxRetries} attempts: ${lastError.join(' | ')}`);
   }
 }
 

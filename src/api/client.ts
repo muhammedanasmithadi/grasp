@@ -45,7 +45,7 @@ Rules: flat arrays only. Every becauseOf references an existing node id. Every b
               },
             ],
             temperature: 0.0,
-            max_tokens: 1000,
+            max_tokens: 8000,
           }),
         });
 

@@ -358,7 +358,7 @@ function StageRig({
   useEffect(() => {
     if (flat) return
     const dir = new THREE.Vector3(1, 0.62, 1.25).normalize()
-    const dist = Math.max(radius * 2.6, 7)
+    const dist = Math.max(radius * 3.4, 9)
     camera.position.copy(center).addScaledVector(dir, dist)
     const persp = camera as THREE.PerspectiveCamera
     persp.near = Math.max(dist / 100, 0.1)

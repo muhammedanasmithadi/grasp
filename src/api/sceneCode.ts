@@ -250,12 +250,13 @@ const DEFAULT_TRANSFORM = { p: [0, 0, 0], r: [0, 0, 0], s: [1, 1, 1] };
 const DEFAULT_MATERIAL = { roughness: 0.5, metalness: 0.6, tint: "#E69F00" };
 
 const STAGE_LIMIT = 60;
+const PART_LIMIT = 16;
 
 // Clamp absurd extents into the stage so one giant slab cannot swallow the
 // scene. Defensive rendering, not validation: the model output still parses.
-function clampNum(v: unknown, fallback: number): number {
+function clampNum(v: unknown, fallback: number, limit = STAGE_LIMIT): number {
   const n = typeof v === "number" && Number.isFinite(v) ? v : fallback;
-  return Math.max(-STAGE_LIMIT, Math.min(STAGE_LIMIT, n));
+  return Math.max(-limit, Math.min(limit, n));
 }
 
 function sanitizeNode(
@@ -273,7 +274,7 @@ function sanitizeNode(
       ? (a.geometry as Record<string, unknown>)
       : undefined;
   const args = Array.isArray(g?.args)
-    ? (g.args as unknown[]).map((v) => clampNum(v, 1))
+    ? (g.args as unknown[]).map((v) => clampNum(v, 1, PART_LIMIT))
     : undefined;
   return {
     ...a,
@@ -282,7 +283,7 @@ function sanitizeNode(
     transform: {
       p: [clampNum(p[0], 0), clampNum(p[1], 0), clampNum(p[2], 0)],
       r: Array.isArray(t.r) ? t.r : [0, 0, 0],
-      s: [clampNum(s[0], 1), clampNum(s[1], 1), clampNum(s[2], 1)],
+      s: [clampNum(s[0], 1, 8), clampNum(s[1], 1, 8), clampNum(s[2], 1, 8)],
     },
     material: a.material ?? DEFAULT_MATERIAL,
     ...(g ? { geometry: { ...g, ...(args ? { args } : {}) } } : {}),

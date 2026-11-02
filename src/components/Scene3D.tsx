@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useMemo, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Line, Html, Gltf } from '@react-three/drei'
+import { OrbitControls, Line, Html, Gltf, Environment } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { DslNode, DslJoint } from '../types'
@@ -20,7 +20,7 @@ const LABEL_STYLE: React.CSSProperties = {
   pointerEvents: 'none',
 }
 
-import { getGrainTexture } from './procedural'
+import { getGrainTexture, getMapTexture } from './procedural'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
@@ -338,6 +338,7 @@ function DslNodeMesh({
         <mesh ref={meshRef} scale={node.transform.s} castShadow geometry={tubeGeo}>
           <meshPhysicalMaterial
             color={base}
+            map={node.material.map ? getMapTexture(node.material.map) : undefined}
             roughness={node.material.roughness ?? 0.5}
             metalness={node.material.metalness ?? 0.6}
             roughnessMap={getGrainTexture()}
@@ -359,6 +360,7 @@ function DslNodeMesh({
         <GeometryFor node={node} />
         <meshPhysicalMaterial
           color={base}
+          map={node.material.map ? getMapTexture(node.material.map) : undefined}
           roughness={node.material.roughness ?? 0.5}
           metalness={node.material.metalness ?? 0.6}
           roughnessMap={getGrainTexture()}
@@ -506,6 +508,7 @@ interface Scene3DProps {
   playing?: boolean
   medium?: '3d' | '2d' | 'hybrid'
   backdrop?: string
+  hdri?: string
   focusNodeIds?: string[]
   sceneKey?: string
 }
@@ -524,6 +527,7 @@ export default function Scene3D({
   playing = true,
   medium = '3d',
   backdrop,
+  hdri,
   focusNodeIds = [],
   sceneKey = 'scene',
 }: Scene3DProps) {
@@ -649,7 +653,9 @@ export default function Scene3D({
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={bg} flat={isFlat} />
       <LightRig center={center} radius={radius} />
       <ShadowCatcher y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />
-      <EnvRig />
+      <Suspense fallback={null}>
+        {hdri ? <Environment files={hdri} /> : <EnvRig />}
+      </Suspense>
       <ClockRig clockRef={clockRef} time={time} playing={playing} />
       {hasNodes
         ? visibleNodes.map((n, i) => (

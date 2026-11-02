@@ -319,6 +319,7 @@ export default function App() {
                       playing
                       medium={medium}
                       backdrop={sceneData?.dsl?.theme?.backdrop}
+                      hdri={sceneData?.dsl?.theme?.hdri}
                       focusNodeIds={[...activeNodeIds, ...faultNodeIds]}
                       sceneKey={concept?.id ?? 'scene'}
                     />

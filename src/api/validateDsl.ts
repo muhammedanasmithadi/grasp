@@ -26,6 +26,14 @@ const MODEL_URL_ALLOWLIST = [
   "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/",
   "https://github.com/KhronosGroup/glTF-Sample-Assets/",
   "https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Assets@",
+  "https://dl.polyhaven.org/file/ph-assets/Models/",
+];
+const TEXTURE_URL_ALLOWLIST = [
+  "https://dl.polyhaven.org/file/ph-assets/Textures/",
+  "https://cdn.jsdelivr.net/gh/mrdoob/three.js@",
+];
+const HDRI_URL_ALLOWLIST = [
+  "https://dl.polyhaven.org/file/ph-assets/HDRIs/",
 ];
 const JOINTS = new Set(["hinge", "slider", "gear"]);
 const MEDIUMS = new Set(["3d", "2d", "hybrid"]);
@@ -68,6 +76,17 @@ export const validateSceneDsl = (
         "E_THEME_BACKDROP: theme.backdrop must be a hex color like #e9e4d6",
       );
     }
+    if (theme?.hdri !== undefined) {
+      const hdriUrl = theme.hdri;
+      if (
+        typeof hdriUrl !== "string" ||
+        !HDRI_URL_ALLOWLIST.some((prefix) => hdriUrl.startsWith(prefix))
+      ) {
+        return yield* fail(
+          "E_THEME_HDRI: theme.hdri must be an allowlisted HDRI URL",
+        );
+      }
+    }
     if (!Array.isArray(d.nodes)) {
       return yield* fail("E_NODES_MISSING: nodes[] is required");
     }
@@ -107,7 +126,7 @@ export const validateSceneDsl = (
         }
         if (!MODEL_URL_ALLOWLIST.some((prefix) => url.startsWith(prefix))) {
           return yield* fail(
-            `E_NODE_MODEL_URL: node "${n.id}" url must be a Khronos sample-asset URL`
+            `E_NODE_MODEL_URL: node "${n.id}" url must be an allowlisted GLB URL`
           );
         }
       }
@@ -133,6 +152,18 @@ export const validateSceneDsl = (
         ) {
           return yield* fail(
             `E_NODE_TUBE_PATH: node "${n.id}" geometry.path must be 2+ [x,y,z] points`
+          );
+        }
+      }
+      const mat = n.material as Record<string, unknown> | undefined;
+      if (mat?.map !== undefined) {
+        const mapUrl = mat.map;
+        if (
+          typeof mapUrl !== "string" ||
+          !TEXTURE_URL_ALLOWLIST.some((prefix) => mapUrl.startsWith(prefix))
+        ) {
+          return yield* fail(
+            `E_MATERIAL_MAP: node "${n.id}" material.map must be an allowlisted texture URL`
           );
         }
       }

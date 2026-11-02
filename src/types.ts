@@ -61,6 +61,7 @@ export interface DslMaterial {
   roughness: number;
   metalness: number;
   tint: string;
+  map?: string;
   clearcoat?: number;
   clearcoatRoughness?: number;
   transmission?: number;
@@ -145,6 +146,7 @@ export interface DslTheme {
   palette: 'okabe-ito';
   keyAzimuth: number;
   backdrop?: string;
+  hdri?: string;
 }
 
 export interface SceneDsl {

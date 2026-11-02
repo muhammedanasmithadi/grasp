@@ -5,7 +5,6 @@ import * as THREE from 'three'
 // bump. Mean stays near white so the model's roughness value keeps its
 // meaning and only variation is added.
 let grain: THREE.CanvasTexture | null = null
-
 export function getGrainTexture(): THREE.CanvasTexture {
   if (grain) return grain
   const size = 256
@@ -37,5 +36,20 @@ export function getGrainTexture(): THREE.CanvasTexture {
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
   tex.repeat.set(2, 2)
   grain = tex
+  return tex
+}
+
+// Remote albedo cache. URLs are validator-allowlisted, CORS-open, and
+// immutable, so one Texture per URL for the session is correct.
+const mapCache = new Map<string, THREE.Texture>()
+
+export function getMapTexture(url: string): THREE.Texture {
+  let tex = mapCache.get(url)
+  if (!tex) {
+    tex = new THREE.TextureLoader().load(url)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+    mapCache.set(url, tex)
+  }
   return tex
 }

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useMemo, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Line, Html, Gltf, Environment } from '@react-three/drei'
+import { OrbitControls, Line, Html, useGLTF, Environment } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { DslNode, DslJoint } from '../types'
@@ -214,9 +214,34 @@ function ModelMesh({ url, scale }: { url: string; scale: [number, number, number
   if (!src) return null
   return (
     <Suspense fallback={null}>
-      <Gltf src={src} scale={scale} castShadow />
+      <ModelInner src={src} scale={scale} />
     </Suspense>
   )
+}
+
+/** Sample-asset models are authored in meters and vary wildly in size.
+ * Center each one and normalize its longest side to ~3 scene units so
+ * a drill, a duck, and a helmet all read at hand scale. */
+function ModelInner({ src, scale }: { src: string; scale: [number, number, number] }) {
+  const gltf = useGLTF(src) as unknown as { scene: THREE.Object3D }
+  const obj = useMemo(() => {
+    const scene = gltf.scene.clone()
+    const box = new THREE.Box3().setFromObject(scene)
+    const size = box.getSize(new THREE.Vector3())
+    const center = box.getCenter(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z, 0.001)
+    const group = new THREE.Group()
+    scene.position.sub(center)
+    scene.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) {
+        o.castShadow = true
+      }
+    })
+    group.add(scene)
+    group.scale.setScalar(3 / maxDim)
+    return group
+  }, [gltf])
+  return <primitive object={obj} scale={scale} />
 }
 
 function useTubeGeometry(path: [number, number, number][] | undefined, radius: number) {

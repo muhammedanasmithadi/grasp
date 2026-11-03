@@ -273,7 +273,7 @@ function ModelInner({ src, scale }: { src: string; scale: [number, number, numbe
     group.add(scene)
     // Node scale multiplies the normalization: R3F would overwrite
     // group.scale from the primitive's scale prop, so bake it in here.
-    const k = 3 / maxDim
+    const k = 2.4 / maxDim
     group.scale.set(scale[0] * k, scale[1] * k, scale[2] * k)
     return group
   }, [gltf, scale])

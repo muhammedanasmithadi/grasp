@@ -87,8 +87,8 @@ export function estimateExtents(n: DslNode): Extents {
         hz: (num(arr[0]) || 0.3) * sx,
       };
     case "model":
-      // Renderer normalizes heroes to ~3 units, scaled by s.
-      return { hx: 1.5 * sx, hy: 1.5 * sy, hz: 1.5 * sx };
+      // Renderer normalizes heroes to ~2.4 units, scaled by s.
+      return { hx: 1.2 * sx, hy: 1.2 * sy, hz: 1.2 * sx };
     case "tube": {
       const path = n.geometry?.path;
       if (Array.isArray(path) && path.length > 0) {
@@ -193,15 +193,19 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   // No giants, no specks: uniform presence for solid primitives.
   // Rescale s so the largest half-extent lands in [0.5, 1.6]; proportions
   // preserved. A tall thin mast counts by height, not just girth.
-  // Tubes, particles, models, and backdrops keep their own sizing.
+  // Models keep authorial scale but are capped, never grown: a hero
+  // scan must not dwarf the row it belongs to.
+  // Tubes, particles, and backdrops keep their own sizing.
   for (const n of row) {
     if (
-      n.type === "tube" || n.type === "points" || n.type === "model" ||
+      n.type === "tube" || n.type === "points" ||
       n.type === "plane" || n.type === "circle" || n.type === "ring"
     ) continue;
     const e = ext.get(n.id)!;
     const biggest = Math.max(e.hx, e.hy, e.hz);
-    const clamped = Math.min(Math.max(biggest, 0.5), 1.6);
+    const clamped = n.type === "model"
+      ? Math.min(biggest, 1.6)
+      : Math.min(Math.max(biggest, 0.5), 1.6);
     const k = clamped / biggest;
     if (Math.abs(k - 1) < 0.01) continue;
     const s = n.transform.s;

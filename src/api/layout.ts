@@ -68,8 +68,10 @@ export function estimateExtents(n: DslNode): { hx: number; hy: number } {
             ry = Math.max(ry, Math.abs(num(pt[1]) - p0[1]));
           }
         }
+        // Reach is clamped at placement (see layoutScene), so estimate
+        // with the same cap: a sprawling hose must not reserve the row.
         const r = num(n.geometry?.radius) || 0.15;
-        return { hx: (rx + r) * sx, hy: (ry + r) * sy };
+        return { hx: Math.min(rx + r, 5.15) * sx, hy: Math.min(ry + r, 5.15) * sy };
       }
       return { hx: 0.5 * sx, hy: 0.5 * sy };
     }
@@ -138,8 +140,14 @@ function causalOrder(dsl: SceneDsl): DslNode[] {
 export function layoutScene(dsl: SceneDsl): SceneDsl {
   const ordered = causalOrder(dsl).filter((n) => !isBackdropNode(n));
   if (ordered.length === 0) return dsl;
+  // Effects (hoses-as-atmosphere, particle swarms, beams) do not take
+  // row slots: one sprawling path must never size the street. They pin
+  // to the row middle after placement, paths translated and clamped.
+  const isEffect = (n: DslNode): boolean => n.type === "tube" || n.type === "points";
+  const row = ordered.filter((n) => !isEffect(n));
+  const effects = ordered.filter(isEffect);
   const ext = new Map<string, { hx: number; hy: number }>();
-  for (const n of ordered) {
+  for (const n of row) {
     const e = estimateExtents(n);
     ext.set(n.id, { hx: Math.min(Math.max(e.hx, 0.3), 6), hy: Math.min(Math.max(e.hy, 0.3), 6) });
   }
@@ -148,9 +156,9 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   for (const g of dsl.groups ?? []) for (const m of g.members) groupOf.set(m, g.id);
   let cursor = 0;
   const xs = new Map<string, number>();
-  ordered.forEach((n, i) => {
+  row.forEach((n, i) => {
     const e = ext.get(n.id)!;
-    const prev = i > 0 ? ordered[i - 1] : null;
+    const prev = i > 0 ? row[i - 1] : null;
     const sameGroup = prev && groupOf.get(prev.id) !== undefined && groupOf.get(prev.id) === groupOf.get(n.id);
     cursor += (i === 0 ? e.hx : e.hx + (sameGroup ? 0.15 : 0.7));
     xs.set(n.id, cursor);
@@ -159,6 +167,32 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   const total = cursor;
   const shiftX = total / 2;
   const nodes = dsl.nodes.map((n) => {
+    const effIdx = effects.findIndex((e) => e.id === n.id);
+    if (effIdx >= 0) {
+      // Pin effects near the middle, slightly stacked, paths clamped.
+      const nx = (effIdx - (effects.length - 1) / 2) * 1.2;
+      const ny = 1.6 + effIdx * 0.3;
+      const old = n.transform.p;
+      const dx = nx - old[0];
+      const dy = ny - old[1];
+      const dz = 0 - old[2];
+      let geometry = n.geometry;
+      if (n.type === "tube" && Array.isArray(n.geometry?.path)) {
+        const clamp = (v: number, c: number): number =>
+          c + Math.max(-5, Math.min(5, v - c));
+        geometry = {
+          ...n.geometry,
+          path: (n.geometry.path as [number, number, number][]).map(
+            ([x, y, z]) => [clamp(x + dx, nx), clamp(y + dy, ny), clamp(z + dz, 0)] as Vec3
+          ),
+        };
+      }
+      return {
+        ...n,
+        transform: { ...n.transform, p: [nx, ny, 0] as Vec3 },
+        geometry,
+      };
+    }
     if (!xs.has(n.id)) {
       // Backdrop: pin behind the action, centered vertically near the row.
       if (n.type === "plane" || n.type === "circle" || n.type === "ring") {

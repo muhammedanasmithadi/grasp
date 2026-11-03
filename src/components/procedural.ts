@@ -51,11 +51,27 @@ export function getStageTexture(bg: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = size
   const ctx = canvas.getContext('2d')!
+  // Match the sky's luminance: a warm disc under a space scene reads
+  // as desert, not void. Dark backdrops get a dark stage.
+  const m = /^#([0-9a-fA-F]{6})$/.exec(bg)
+  const lum = m
+    ? (0.299 * parseInt(m[1].slice(0, 2), 16) +
+      0.587 * parseInt(m[1].slice(2, 4), 16) +
+      0.114 * parseInt(m[1].slice(4, 6), 16)) / 255
+    : 0.8
+  const dark = lum < 0.35
   const g = ctx.createRadialGradient(size / 2, size / 2, size * 0.04, size / 2, size / 2, size * 0.5)
-  g.addColorStop(0, '#e3d8bf')
-  g.addColorStop(0.45, '#ddd2b8')
-  g.addColorStop(0.75, bg)
-  g.addColorStop(1, bg)
+  if (dark) {
+    g.addColorStop(0, '#2b303c')
+    g.addColorStop(0.45, '#252a35')
+    g.addColorStop(0.75, bg)
+    g.addColorStop(1, bg)
+  } else {
+    g.addColorStop(0, '#e3d8bf')
+    g.addColorStop(0.45, '#ddd2b8')
+    g.addColorStop(0.75, bg)
+    g.addColorStop(1, bg)
+  }
   ctx.fillStyle = g
   ctx.fillRect(0, 0, size, size)
   // Faint tonal patches for matter.

@@ -919,6 +919,12 @@ function Stage({
 }) {
   const plinthR = Math.max(subjectR * 1.35 + 0.8, 3)
   const discR = Math.max(subjectR * 5, 16)
+  const m = /^#([0-9a-fA-F]{6})$/.exec(bg)
+  const darkStage = m
+    ? (0.299 * parseInt(m[1].slice(0, 2), 16) +
+      0.587 * parseInt(m[1].slice(2, 4), 16) +
+      0.114 * parseInt(m[1].slice(4, 6), 16)) / 255 < 0.35
+    : false
   return (
     <group>
       {/* seamless ground disc */}
@@ -929,7 +935,7 @@ function Stage({
       {/* plinth: satin product-shot sweep, catches a soft key reflection */}
       <mesh position={[cx, topY - 0.17, cz]} receiveShadow castShadow>
         <cylinderGeometry args={[plinthR, plinthR + 0.18, 0.34, 64]} />
-        <meshPhysicalMaterial color="#e6dcc4" roughness={0.5} metalness={0} clearcoat={0.2} clearcoatRoughness={0.4} envMapIntensity={0.5} />
+        <meshPhysicalMaterial color={darkStage ? '#39404f' : '#e6dcc4'} roughness={0.5} metalness={0} clearcoat={0.2} clearcoatRoughness={0.4} envMapIntensity={0.5} />
       </mesh>
       {/* plinth shadow gap: thin dark reveal under the rim */}
       <mesh position={[cx, topY - 0.335, cz]}>

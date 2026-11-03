@@ -4,6 +4,7 @@ import { OrbitControls, Line, Html, useGLTF, Environment } from '@react-three/dr
 import { EffectComposer, Bloom, Vignette, HueSaturation, BrightnessContrast } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import type { DslNode, DslJoint } from '../types'
 
 const DEFAULT_BACKDROP = '#e9e4d6'
@@ -125,6 +126,34 @@ function PartNode({
       </Html>
     </group>
   )
+}
+
+/** Label-driven substance texturing. When the model omits material.map,
+ * the part name usually still says what the matter is ("oak beam",
+ * "steel shaft"). Map those words onto verified texture URLs so every
+ * world gets real surfaces unconditionally. Explicit maps always win. */
+const SUBSTANCE_MAPS: Array<{ words: string[]; slug: string }> = [
+  { words: ['wood', 'oak', 'plank', 'beam', 'timber', 'log', 'tree', 'trunk', 'branch'], slug: 'dark_wooden_planks' },
+  { words: ['metal', 'steel', 'iron', 'aluminum', 'aluminium', 'brass', 'copper', 'shaft', 'rod', 'pipe', 'barrel', 'engine'], slug: 'metal_plate' },
+  { words: ['rock', 'stone', 'boulder', 'cliff', 'mountain', 'concrete', 'cement', 'brick'], slug: 'brown_mud_rocks_01' },
+  { words: ['grass', 'lawn', 'meadow', 'field', 'ground', 'soil', 'dirt', 'earth', 'terrain'], slug: 'grass_ground' },
+  { words: ['marble', 'statue'], slug: 'marble_01' },
+  { words: ['fabric', 'cloth', 'canvas', 'denim', 'curtain', 'shirt', 'flag'], slug: 'denim_fabric' },
+  { words: ['sand', 'desert', 'beach'], slug: 'aerial_sand' },
+  { words: ['bark'], slug: 'bark_brown_01' },
+  { words: ['snow', 'ice', 'frost'], slug: 'snow_01' },
+  { words: ['plaster', 'wall', 'ceiling'], slug: 'grey_plaster' },
+]
+
+function substanceTexture(node: DslNode): string | null {
+  if (node.type === 'tube' || node.type === 'points' || node.type === 'model') return null
+  const hay = `${node.label} ${node.id}`.toLowerCase()
+  for (const { words, slug } of SUBSTANCE_MAPS) {
+    if (words.some((w) => hay.includes(w))) {
+      return `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/${slug}/${slug}_diff_1k.jpg`
+    }
+  }
+  return null
 }
 
 function taperedRadius(t: number): number {
@@ -276,10 +305,25 @@ function PointsCloud({ count, size, color }: { count: number; size: number; colo
   )
 }
 
+function BoxGeometry({ node }: { node: import('../types').DslNode }) {
+  const geo = useMemo(() => {
+    const a = (node.geometry?.args as number[] | undefined) ?? [1, 1, 1]
+    const w = Number(a[0]) || 1
+    const h = Number(a[1]) || 1
+    const d = Number(a[2]) || 1
+    // Soft edges kill the harsh CG-box read on every housing and block.
+    const r = Math.min(w, h, d) * 0.12
+    return new RoundedBoxGeometry(w, h, d, 4, r)
+  }, [node])
+  return <primitive object={geo} attach="geometry" />
+}
+
 function GeometryFor({ node }: { node: import('../types').DslNode }) {
   const g = node.geometry ?? {}
   const args = g.args
   switch (node.type) {
+    case 'box':
+      return <BoxGeometry node={node} />
     case 'cylinder':
       return <cylinderGeometry args={(args as [number, number, number, number]) ?? [0.5, 0.5, 1, 24]} />
     case 'sphere':
@@ -409,6 +453,8 @@ function DslNodeMesh({
   const base = isFault
     ? '#D55E00'
     : groundSafeTint(node.material.tint || color, bigBright)
+  const autoMap = node.material.map ?? substanceTexture(node)
+  const mapTex = autoMap ? getMapTexture(autoMap) : undefined
   const isTube = node.type === 'tube'
   const tubeGeo = useTubeGeometry(
     node.type === 'tube' ? (node.geometry?.path as [number, number, number][] | undefined) : undefined,
@@ -436,7 +482,7 @@ function DslNodeMesh({
         <mesh ref={meshRef} scale={node.transform.s} castShadow geometry={tubeGeo}>
           <meshPhysicalMaterial
             color={base}
-            map={node.material.map ? getMapTexture(node.material.map) : undefined}
+            map={mapTex}
             roughness={node.material.roughness ?? 0.5}
             metalness={node.material.metalness ?? 0.6}
             roughnessMap={getGrainTexture()}

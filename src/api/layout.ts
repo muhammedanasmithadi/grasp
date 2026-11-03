@@ -233,6 +233,10 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   }
   const total = cursor;
   const shiftX = total / 2;
+  // Span cap: a 20-organ row would shrink every part to a speck. Squeeze
+  // x toward the middle so the whole street fits in 16 units; order and
+  // relative gaps survive, contacts stay approximately mated.
+  const squeeze = total > 16 ? 16 / total : 1;
   const zOf = (n: DslNode): number => staggerZ.get(groupOf.get(n.id) ?? `__solo:${n.id}`) ?? 0;
   const placed = new Map(ordered.map((n) => [n.id, n]));
   const dropped = new Set(dsl.nodes.filter(isAuthoredStage).map((n) => n.id));
@@ -281,7 +285,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       return n;
     }
     const e = ext.get(n.id)!;
-    const nx = xs.get(n.id)! - shiftX;
+    const nx = (xs.get(n.id)! - shiftX) * squeeze;
     const ny = e.hy + 0.02;
     const nz = zOf(n);
     const old = n.transform.p;

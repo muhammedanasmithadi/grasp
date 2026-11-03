@@ -554,8 +554,8 @@ function DslNodeMesh({
   )
 }
 
-/** One label per compound group, pinned at the centroid of its visible
- * members. Members never self-label: the assembly reads as one part. */
+/** One label per compound group, pinned above its centroid. Lifted
+ * like part labels: a tag at the centroid sits inside the solid. */
 function GroupLabels({
   groups,
   positions,
@@ -582,7 +582,7 @@ function GroupLabels({
           .multiplyScalar(1 / pts.length)
         const isFault = g.members.some((m) => faultNodeIds.includes(m))
         return (
-          <group key={g.id} position={c}>
+          <group key={g.id} position={[c.x, c.y + 1.4, c.z]}>
             <Html center distanceFactor={10} occlude zIndexRange={[20, 0]}>
               <div
                 style={{
@@ -1087,7 +1087,7 @@ export default function Scene3D({
       gl={{ antialias: true }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 1.05
+        gl.toneMappingExposure = 1.0
       }}
     >
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat && spin} autoRotateSpeed={0.5} enableDamping onStart={() => setSpin(false)} />
@@ -1101,7 +1101,7 @@ export default function Scene3D({
           position={[focus.target.x + 4, focus.target.y + 7, focus.target.z + 5]}
           angle={0.5}
           penumbra={0.8}
-          intensity={0.9}
+          intensity={0.5}
           color="#ffe9c4"
         />
       )}

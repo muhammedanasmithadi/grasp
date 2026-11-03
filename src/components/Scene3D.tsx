@@ -380,7 +380,15 @@ function DslNodeMesh({
       )
     }
   })
-  const base = isFault ? '#D55E00' : node.material.tint || color
+  const slabSpan = (() => {
+    if (node.type !== 'plane' && node.type !== 'circle') return 0
+    const a = node.geometry?.args
+    const w = Array.isArray(a) ? Math.abs(Number(a[0]) || 0) : 0
+    return w * Math.abs(node.transform.s[0])
+  })()
+  const base = isFault
+    ? '#D55E00'
+    : groundSafeTint(node.material.tint || color, slabSpan >= 8)
   const isTube = node.type === 'tube'
   const tubeGeo = useTubeGeometry(
     node.type === 'tube' ? (node.geometry?.path as [number, number, number][] | undefined) : undefined,
@@ -602,6 +610,23 @@ function LightRig({ center, radius }: { center: THREE.Vector3; radius: number })
       <directionalLight position={fillPos} intensity={0.4} color="#dfe8ff" />
     </>
   )
+}
+
+/** Ground planes must never be near-white: one blown-out disc plus a
+ * strong key reads as a void, not a stage. Clamp bright ground tints
+ * toward warm gray at render time (the prompt already forbids them,
+ * but clamping always works while rejection just fails the world). */
+function groundSafeTint(tint: string, isGround: boolean): string {
+  if (!isGround || !/^#[0-9a-fA-F]{6}$/.test(tint)) return tint
+  const r = parseInt(tint.slice(1, 3), 16) / 255
+  const g = parseInt(tint.slice(3, 5), 16) / 255
+  const b = parseInt(tint.slice(5, 7), 16) / 255
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b
+  if (lum <= 0.85) return tint
+  const mix = (c: number, t: number): number =>
+    Math.round((c * 0.4 + t * 0.6) * 255)
+  const toHex = (v: number): string => v.toString(16).padStart(2, '0')
+  return `#${toHex(mix(r, 0.72))}${toHex(mix(g, 0.67))}${toHex(mix(b, 0.55))}`
 }
 
 /** Textured stage floor that receives real shadows. The model may lay

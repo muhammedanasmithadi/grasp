@@ -13,49 +13,82 @@ function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? Math.abs(v) : 0;
 }
 
-/** Half-extents (hx, hy) of a node in world units. */
-export function estimateExtents(n: DslNode): { hx: number; hy: number } {
+/** Authored stage pieces the model was told not to make. Dropped
+ * silently: a stripped slab beats a failed world. */
+function isAuthoredStage(n: DslNode): boolean {
+  const a = n.geometry?.args;
+  const arr = Array.isArray(a) ? a : [];
+  const s = n.transform.s;
+  const dims = [
+    num(arr[0]) * (num(s[0]) || 1),
+    num(arr[1]) * (num(s[1]) || 1),
+    num(arr[2]) * (num(s[2]) || 1),
+  ];
+  const flat = Math.abs(num(n.transform.r[0]) - Math.PI / 2) < 0.15;
+  if ((n.type === "plane" || n.type === "circle" || n.type === "ring") && flat && Math.max(dims[0], dims[1]) >= 8) {
+    return true;
+  }
+  if (
+    n.type === "box" &&
+    dims[1] <= 1.5 &&
+    Math.max(dims[0], dims[2]) >= 8 &&
+    num(n.transform.p[1]) - dims[1] / 2 <= 1.0
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Half-extents (hx, hy, hz) of a node in world units. */
+export interface Extents { hx: number; hy: number; hz: number }
+
+export function estimateExtents(n: DslNode): Extents {
   const a = n.geometry?.args;
   const arr = Array.isArray(a) ? a : [];
   const sx = num(n.transform.s[0]) || 1;
   const sy = num(n.transform.s[1]) || 1;
+  const sz = num(n.transform.s[2]) || 1;
   switch (n.type) {
     case "box":
       return {
         hx: (num(arr[0]) || 1) * sx / 2,
         hy: (num(arr[1]) || 1) * sy / 2,
+        hz: (num(arr[2]) || 1) * sz / 2,
       };
     case "cylinder":
     case "cone":
       // Builder may pass [r,h] or three-style [rTop,rBottom,h].
       if (arr.length <= 2) {
-        return { hx: (num(arr[0]) || 0.5) * sx, hy: (num(arr[1]) || 1) * sy / 2 };
+        return { hx: (num(arr[0]) || 0.5) * sx, hy: (num(arr[1]) || 1) * sy / 2, hz: (num(arr[0]) || 0.5) * sx };
       }
       return {
         hx: Math.max(num(arr[0]) || 0.5, num(arr[1]) || 0.5) * sx,
         hy: (num(arr[2]) || 1) * sy / 2,
+        hz: Math.max(num(arr[0]) || 0.5, num(arr[1]) || 0.5) * sx,
       };
     case "sphere":
     case "icosahedron":
     case "dodecahedron":
     case "octahedron":
     case "tetrahedron":
-      return { hx: (num(arr[0]) || 0.5) * sx, hy: (num(arr[0]) || 0.5) * sy };
+      return { hx: (num(arr[0]) || 0.5) * sx, hy: (num(arr[0]) || 0.5) * sy, hz: (num(arr[0]) || 0.5) * sx };
     case "torus":
     case "torusKnot":
     case "ring":
       return {
         hx: ((num(arr[0]) || 0.5) + (num(arr[1]) || 0.2)) * sx,
         hy: ((num(arr[0]) || 0.5) + (num(arr[1]) || 0.2)) * sy,
+        hz: ((num(arr[0]) || 0.5) + (num(arr[1]) || 0.2)) * sx,
       };
     case "capsule":
       return {
         hx: (num(arr[0]) || 0.3) * sx,
         hy: ((num(arr[1]) || 1) / 2 + (num(arr[0]) || 0.3)) * sy,
+        hz: (num(arr[0]) || 0.3) * sx,
       };
     case "model":
       // Renderer normalizes heroes to ~3 units, scaled by s.
-      return { hx: 1.5 * sx, hy: 1.5 * sy };
+      return { hx: 1.5 * sx, hy: 1.5 * sy, hz: 1.5 * sx };
     case "tube": {
       const path = n.geometry?.path;
       if (Array.isArray(path) && path.length > 0) {
@@ -71,17 +104,17 @@ export function estimateExtents(n: DslNode): { hx: number; hy: number } {
         // Reach is clamped at placement (see layoutScene), so estimate
         // with the same cap: a sprawling hose must not reserve the row.
         const r = num(n.geometry?.radius) || 0.15;
-        return { hx: Math.min(rx + r, 5.15) * sx, hy: Math.min(ry + r, 5.15) * sy };
+        return { hx: Math.min(rx + r, 5.15) * sx, hy: Math.min(ry + r, 5.15) * sy, hz: Math.min(rx + r, 5.15) * sx };
       }
-      return { hx: 0.5 * sx, hy: 0.5 * sy };
+      return { hx: 0.5 * sx, hy: 0.5 * sy, hz: 0.5 * sx };
     }
     case "points":
-      return { hx: 1 * sx, hy: 1 * sy };
+      return { hx: 1 * sx, hy: 1 * sy, hz: 1 * sy };
     case "circle":
     case "plane":
-      return { hx: (num(arr[0]) || 1) * sx / 2, hy: (num(arr[1]) || 1) * sy / 2 };
+      return { hx: (num(arr[0]) || 1) * sx / 2, hy: (num(arr[1]) || 1) * sy / 2, hz: (num(arr[0]) || 1) * sx / 2 };
     default:
-      return { hx: 0.75 * sx, hy: 0.75 * sy };
+      return { hx: 0.75 * sx, hy: 0.75 * sy, hz: 0.75 * sx };
   }
 }
 
@@ -149,10 +182,10 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   const isEffect = (n: DslNode): boolean => n.type === "tube" || n.type === "points";
   const row = ordered.filter((n) => !isEffect(n));
   const effects = ordered.filter(isEffect);
-  const ext = new Map<string, { hx: number; hy: number }>();
+  const ext = new Map<string, Extents>();
   for (const n of row) {
     const e = estimateExtents(n);
-    ext.set(n.id, { hx: Math.min(Math.max(e.hx, 0.01), 8), hy: Math.min(Math.max(e.hy, 0.01), 8) });
+    ext.set(n.id, { hx: Math.min(Math.max(e.hx, 0.01), 8), hy: Math.min(Math.max(e.hy, 0.01), 8), hz: Math.min(Math.max(e.hz, 0.01), 8) });
   }
   // Cursor pass: gap 0.15 inside a group (touching), 0.7 between organs.
   const groupOf = new Map<string, string>();
@@ -171,7 +204,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
     if (Math.abs(k - 1) < 0.01) continue;
     const s = n.transform.s;
     n.transform = { ...n.transform, s: [s[0] * k, s[1] * k, s[2] * k] as Vec3 };
-    ext.set(n.id, { hx: clamped, hy: e.hy * k });
+    ext.set(n.id, { hx: clamped, hy: e.hy * k, hz: e.hz * k });
   }
   let cursor = 0;
   const xs = new Map<string, number>();
@@ -183,9 +216,26 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
     xs.set(n.id, cursor);
     cursor += e.hx;
   });
+  // Depth stagger: alternate groups between front and back rows so the
+  // composition reads in depth, not as a flat lineup. Members of one
+  // group share z (contacts stay valid); the gap between organs is in
+  // x, so staggering never breaks a mating face.
+  const staggerZ = new Map<string, number>();
+  {
+    const seenGroups: string[] = [];
+    const keyOf = (n: DslNode): string => groupOf.get(n.id) ?? `__solo:${n.id}`;
+    for (const n of row) {
+      const k = keyOf(n);
+      if (!seenGroups.includes(k)) seenGroups.push(k);
+    }
+    seenGroups.forEach((k, i) => staggerZ.set(k, i % 2 === 0 ? 0 : -1.6));
+    // Front row stays at 0; back row recedes. Alternate keeps neighbors apart.
+  }
   const total = cursor;
   const shiftX = total / 2;
+  const zOf = (n: DslNode): number => staggerZ.get(groupOf.get(n.id) ?? `__solo:${n.id}`) ?? 0;
   const placed = new Map(ordered.map((n) => [n.id, n]));
+  const dropped = new Set(dsl.nodes.filter(isAuthoredStage).map((n) => n.id));
   const nodes = dsl.nodes.map((n) => {
     const src = placed.get(n.id) ?? n;
     const effIdx = effects.findIndex((e) => e.id === n.id);
@@ -227,10 +277,11 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
     const e = ext.get(n.id)!;
     const nx = xs.get(n.id)! - shiftX;
     const ny = e.hy + 0.02;
+    const nz = zOf(n);
     const old = n.transform.p;
     const dx = nx - old[0];
     const dy = ny - old[1];
-    const dz = 0 - old[2];
+    const dz = nz - old[2];
     let geometry = n.geometry;
     if (n.type === "tube" && Array.isArray(n.geometry?.path)) {
       // Translate with the node, but clamp reach: one sprawling hose
@@ -248,9 +299,10 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
     }
     return {
       ...n,
-      transform: { ...src.transform, p: [nx, ny, 0] as Vec3 },
+      transform: { ...src.transform, p: [nx, ny, nz] as Vec3 },
       geometry,
     };
-  });
+  }).filter((n) => !dropped.has(n.id));
+  if (dropped.size > 0) console.info(`[layout] stripped authored stage: ${[...dropped].join(", ")}`);
   return { ...dsl, nodes };
 }

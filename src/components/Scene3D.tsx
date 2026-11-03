@@ -23,6 +23,8 @@ const LABEL_STYLE: React.CSSProperties = {
 }
 
 import { getGrainTexture, getMapTexture, getLinearTexture, getStageTexture } from './procedural'
+import { estimateExtents } from '../api/layout'
+import { DetailFor } from './details'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
@@ -533,12 +535,17 @@ function DslNodeMesh({
       </mesh>
       )}
       {showLabel && (
+      /* Lifted above the solid: a tag centered inside its own part is
+      occluded by that part and never seen. */
+      <group position={[0, estimateExtents(node).hy + 0.7, 0]}>
       <Html center distanceFactor={10} occlude zIndexRange={[20, 0]}>
         <div style={LABEL_STYLE}>
           {node.label}
         </div>
       </Html>
+      </group>
       )}
+      {!isModel && !isPoints && node.type !== 'tube' && <DetailFor node={node} />}
     </group>
   )
 }

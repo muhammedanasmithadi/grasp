@@ -154,6 +154,23 @@ export const validateSceneDsl = (
             `E_NODE_TUBE_PATH: node "${n.id}" geometry.path must be 2+ [x,y,z] points`
           );
         }
+        // Sprawling hoses own the frame: keep paths near their node.
+        const tf0 = (n.transform ?? {}) as { p?: unknown };
+        const p0 = Array.isArray(tf0.p) ? (tf0.p as number[]) : [0, 0, 0];
+        let reach = 0;
+        for (const pt of path as number[][]) {
+          reach = Math.max(
+            reach,
+            Math.abs(pt[0] - p0[0]),
+            Math.abs(pt[1] - p0[1]),
+            Math.abs(pt[2] - p0[2])
+          );
+        }
+        if (reach > 9) {
+          return yield* fail(
+            `E_TUBE_SPRAWL: node "${n.id}" path reaches ${reach.toFixed(1)} units from its origin; keep tube paths within 9 units`
+          );
+        }
       }
       const mat = n.material as Record<string, unknown> | undefined;
       for (const field of ["map", "normalMap"] as const) {
@@ -169,35 +186,9 @@ export const validateSceneDsl = (
           }
         }
       }
-      // No authored stages: the renderer provides the ground. A wide
-      // horizontal plane or a thin wide slab sitting on the floor would
-      // double the stage and shrink the subject to a speck.
-      const tf = (n.transform ?? {}) as Record<string, unknown>;
-      const p = Array.isArray(tf.p) ? (tf.p as unknown[]) : [];
-      const r = Array.isArray(tf.r) ? (tf.r as unknown[]) : [];
-      const s = Array.isArray(tf.s) ? (tf.s as unknown[]) : [];
-      const num = (v: unknown): number =>
-        typeof v === "number" && Number.isFinite(v) ? Math.abs(v) : 0;
-      const args = (geo?.args ?? {}) as unknown;
-      const dims = Array.isArray(args)
-        ? [num(args[0]) * (num(s[0]) || 1), num(args[1]) * (num(s[1]) || 1), num(args[2]) * (num(s[2]) || 1)]
-        : [0, 0, 0];
-      const flat = Math.abs(num(r[0]) - Math.PI / 2) < 0.15;
-      if ((n.type === "plane" || n.type === "circle") && flat && Math.max(dims[0], dims[1]) >= 8) {
-        return yield* fail(
-          `E_GROUND_PLANE: node "${n.id}" is an authored ground plane; the renderer provides the stage`
-        );
-      }
-      if (
-        n.type === "box" &&
-        dims[1] <= 1.5 &&
-        Math.max(dims[0], dims[2]) >= 8 &&
-        num(p[1]) - dims[1] / 2 <= 1.0
-      ) {
-        return yield* fail(
-          `E_GROUND_SLAB: node "${n.id}" is an authored stage slab; rest the lowest solid near y=0 instead`
-        );
-      }
+      // Authored stages are the stager's job, not the model's: drop the
+      // rejection here and let layoutScene strip slabs silently. A
+      // dropped slab beats a failed world.
     }
 
     // Compound groups: 2+ primitives sharing one label. Members must

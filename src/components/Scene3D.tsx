@@ -1118,6 +1118,18 @@ export default function Scene3D({
         for (const m of g.members) mateIds.add(m)
       }
     }
+    // Immediate row-neighbors count too: a beat reads against the parts
+    // it touches, and a close-up that crops the touching neighbor reads
+    // as a mistake. Nodes within one organ-gap of any focus node join.
+    const byX = [...visibleNodes].sort((a, b) => a.transform.p[0] - b.transform.p[0])
+    const focusX = byX.filter((n) => mateIds.has(n.id)).map((n) => n.transform.p[0])
+    if (focusX.length > 0) {
+      const lo = Math.min(...focusX) - 3.5
+      const hi = Math.max(...focusX) + 3.5
+      for (const n of byX) {
+        if (n.transform.p[0] >= lo && n.transform.p[0] <= hi) mateIds.add(n.id)
+      }
+    }
     const pts = [...mateIds]
       .map((id) => nodePositions.get(id))
       .filter((p): p is THREE.Vector3 => !!p)

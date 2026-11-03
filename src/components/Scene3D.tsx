@@ -20,7 +20,7 @@ const LABEL_STYLE: React.CSSProperties = {
   pointerEvents: 'none',
 }
 
-import { getGrainTexture, getMapTexture } from './procedural'
+import { getGrainTexture, getMapTexture, getGroundTexture } from './procedural'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
@@ -486,6 +486,28 @@ function StageRig({
   } | null
   const near = Math.max(radius * 3, 14)
   const far = Math.max(radius * 8, 40)
+  const domeR = far * 0.45
+  const sky = useMemo(() => {
+    const top = new THREE.Color(bg).multiplyScalar(0.62)
+    const bottom = new THREE.Color(bg).multiplyScalar(1.04)
+    const geo = new THREE.SphereGeometry(1, 32, 16)
+    const mat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+      uniforms: {
+        top: { value: top },
+        bottom: { value: bottom },
+      },
+      vertexShader:
+        'varying vec3 vP; void main() { vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader:
+        'uniform vec3 top; uniform vec3 bottom; varying vec3 vP;' +
+        'void main() { float h = normalize(vP).y * 0.5 + 0.5;' +
+        ' gl_FragColor = vec4(mix(bottom, top, smoothstep(0.02, 0.65, h)), 1.0); }',
+    })
+    return { geo, mat }
+  }, [bg])
   useEffect(() => {
     if (flat) return
     const dir = new THREE.Vector3(1, 0.62, 1.25).normalize()
@@ -504,6 +526,9 @@ function StageRig({
     <>
       <color attach="background" args={[bg]} />
       <fog attach="fog" args={[bg, near, far]} />
+      {!flat && (
+        <mesh geometry={sky.geo} material={sky.mat} scale={domeR} renderOrder={-1} />
+      )}
     </>
   )
 }
@@ -524,8 +549,8 @@ function LightRig({ center, radius }: { center: THREE.Vector3; radius: number })
       <hemisphereLight args={['#fffaf0', '#9a8f78', 0.55]} />
       <directionalLight
         position={keyPos}
-        intensity={1.7}
-        color="#fff1dc"
+        intensity={2.1}
+        color="#ffedd6"
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-r}
@@ -542,8 +567,9 @@ function LightRig({ center, radius }: { center: THREE.Vector3; radius: number })
   )
 }
 
-/** Invisible plane that catches soft shadows so parts sit in space. */
-function ShadowCatcher({
+/** Textured stage floor that receives real shadows. The model may lay
+ * its own planes on top; this guarantees the world never floats in a void. */
+function Ground({
   y,
   size,
   cx,
@@ -554,14 +580,32 @@ function ShadowCatcher({
   cx: number
   cz: number
 }) {
-  const s = Math.max(size * 8, 24)
+  const s = Math.max(size * 10, 30)
   return (
     <mesh rotation-x={-Math.PI / 2} position={[cx, y, cz]} receiveShadow>
       <planeGeometry args={[s, s]} />
-      <shadowMaterial opacity={0.22} color="#1a150c" />
+      <meshStandardMaterial map={getGroundTexture()} roughness={0.95} metalness={0} />
     </mesh>
   )
 }
+
+/** HDRI with a procedural fallback. A failed download must never blank
+ * the canvas, so the boundary swaps back to image-based lighting. */
+class EnvBoundary extends React.Component<
+  { fallback: React.ReactNode; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true }
+  }
+  render(): React.ReactNode {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
+
+const DEFAULT_HDRI =
+  'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/lythwood_room_1k.hdr'
 
 interface Scene3DProps {
   beats: { id: string | number; title: string; part: string }[]
@@ -721,9 +765,11 @@ export default function Scene3D({
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault />
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={bg} flat={isFlat} />
       <LightRig center={center} radius={radius} />
-      <ShadowCatcher y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />
+      <Ground y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />
       <Suspense fallback={null}>
-        {hdri ? <Environment files={hdri} /> : <EnvRig />}
+        <EnvBoundary fallback={<EnvRig />}>
+          <Environment files={hdri ?? DEFAULT_HDRI} />
+        </EnvBoundary>
       </Suspense>
       <ClockRig clockRef={clockRef} time={time} playing={playing} />
       {hasNodes

@@ -53,3 +53,39 @@ export function getMapTexture(url: string): THREE.Texture {
   }
   return tex
 }
+
+// Large-scale warm ground: fine grain over soft tonal patches so the
+// stage reads as matter, not a void. Tiled with wrapping.
+let ground: THREE.CanvasTexture | null = null
+
+export function getGroundTexture(): THREE.CanvasTexture {
+  if (ground) return ground
+  const size = 512
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#ded4ba'
+  ctx.fillRect(0, 0, size, size)
+  for (let i = 0; i < 220; i++) {
+    const r = 20 + Math.random() * 70
+    const v = 205 + Math.floor(Math.random() * 30)
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r)
+    g.addColorStop(0, `rgba(${v},${v - 8},${v - 30},0.28)`)
+    g.addColorStop(1, 'rgba(222,212,186,0)')
+    ctx.save()
+    ctx.translate(Math.random() * size, Math.random() * size)
+    ctx.fillStyle = g
+    ctx.fillRect(-r, -r, r * 2, r * 2)
+    ctx.restore()
+  }
+  for (let i = 0; i < 26000; i++) {
+    const v = 190 + Math.floor(Math.random() * 55)
+    ctx.fillStyle = `rgba(${v},${v - 6},${v - 24},0.45)`
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1.6, 1.6)
+  }
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(7, 7)
+  ground = tex
+  return tex
+}

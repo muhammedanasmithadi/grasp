@@ -1115,7 +1115,10 @@ export default function Scene3D({
     // Seed from the primary assembly only: the first group containing a
     // beat node, plus any ungrouped beat nodes. Seeding from every
     // becauseOf id at once reverted dense rows to establishing shots on
-    // every beat and the close-ups never happened.
+    // every beat and the close-ups never happened. Row-neighbors are
+    // deliberately NOT included: a ±window around the seed reverted
+    // every beat to wide for the same reason (measured twice). A beat
+    // frames its organ; the street stays visible around it.
     const seedIds = new Set<string>()
     const primary = groups.find((g) => g.members.some((m) => focusNodeIds.includes(m)))
     if (primary) {
@@ -1131,20 +1134,6 @@ export default function Scene3D({
     for (const g of groups) {
       if (g.members.some((m) => mateIds.has(m))) {
         for (const m of g.members) mateIds.add(m)
-      }
-    }
-    // Immediate row-neighbors count too: a beat reads against the parts
-    // it touches, and a close-up that crops the touching neighbor reads
-    // as a mistake. The window stays tight (±1.2, about one organ gap):
-    // wider windows silently reverted every beat to a wide establishing
-    // shot and killed the close-ups entirely.
-    const byX = [...visibleNodes].sort((a, b) => a.transform.p[0] - b.transform.p[0])
-    const focusX = byX.filter((n) => mateIds.has(n.id)).map((n) => n.transform.p[0])
-    if (focusX.length > 0) {
-      const lo = Math.min(...focusX) - 1.2
-      const hi = Math.max(...focusX) + 1.2
-      for (const n of byX) {
-        if (n.transform.p[0] >= lo && n.transform.p[0] <= hi) mateIds.add(n.id)
       }
     }
     const pts = [...mateIds]

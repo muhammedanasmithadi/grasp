@@ -107,7 +107,7 @@ export function DetailFor({ node }: { node: DslNode }): React.ReactElement | nul
       </group>
     )
   }
-  if (has('bulb', 'bead', 'lamp', 'light', 'led', 'glow', 'filament', 'flame', 'fire', 'blaze', 'burner', 'torch')) {
+  if (has('bulb', 'bead', 'lamp', 'light', 'led', 'glow', 'filament', 'flame', 'fire', 'blaze', 'burner', 'torch', 'sun', 'star', 'comet')) {
     return (
       <group>
         <P color={tint} metalness={0.1} roughness={0.3} emissive={tint} emissiveIntensity={1.6} geo={<sphereGeometry args={[hx * 0.55, 20, 20]} />} />

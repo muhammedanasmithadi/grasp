@@ -154,6 +154,11 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   const hosePath = (hose.geometry!.path as number[][])[0];
   check("row-tube-path-follows", hosePath[1] < 3.0, `pathY=${hosePath[1].toFixed(2)}`);
 
+  // 12. Celestial fallback: globes get earth, moons get the moon.
+  const celNode = (label: string) => ({ id: "c", type: "sphere", parent: null, transform: { p: [0,1,0], r: [0,0,0], s: [1,1,1] }, material: { roughness: 0.5, metalness: 0.1, tint: "#888888" }, label, geometry: { args: [1] } });
+  check("substance-earth", (substanceTexture(celNode("Globe Sphere") as never) ?? "").includes("earth_atmos_2048"));
+  check("substance-moon", (substanceTexture(celNode("lunar disc") as never) ?? "").includes("moon_1024"));
+
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");
 });

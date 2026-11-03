@@ -148,6 +148,18 @@ const SUBSTANCE_MAPS: Array<{ words: string[]; slug: string }> = [
   { words: ['plaster', 'wall', 'ceiling'], slug: 'grey_plaster' },
 ]
 
+/** Non-PolyHaven albedo fallbacks (verified CORS-open hosts). */
+const REMOTE_MAPS: Array<{ words: string[]; url: string }> = [
+  {
+    words: ['earth', 'globe', 'planet', 'continent', 'ocean planet'],
+    url: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/earth_atmos_2048.jpg',
+  },
+  {
+    words: ['moon', 'lunar', 'crater'],
+    url: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/moon_1024.jpg',
+  },
+]
+
 export function substanceTexture(node: DslNode): string | null {
   if (node.type === 'tube' || node.type === 'points' || node.type === 'model') return null
   const hay = `${node.label} ${node.id}`.toLowerCase()
@@ -155,6 +167,9 @@ export function substanceTexture(node: DslNode): string | null {
     if (words.some((w) => hay.includes(w))) {
       return `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/${slug}/${slug}_diff_1k.jpg`
     }
+  }
+  for (const { words, url } of REMOTE_MAPS) {
+    if (words.some((w) => hay.includes(w))) return url
   }
   return null
 }

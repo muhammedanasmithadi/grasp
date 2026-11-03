@@ -40,6 +40,42 @@ export function getGrainTexture(): THREE.CanvasTexture {
   return tex
 }
 
+// Seamless stage disc: warm matter under the subject dissolving into
+// the backdrop color at the rim. No visible edge, no horizon seam.
+const stageCache = new Map<string, THREE.CanvasTexture>()
+
+export function getStageTexture(bg: string): THREE.CanvasTexture {
+  let tex = stageCache.get(bg)
+  if (tex) return tex
+  const size = 512
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const g = ctx.createRadialGradient(size / 2, size / 2, size * 0.04, size / 2, size / 2, size * 0.5)
+  g.addColorStop(0, '#e3d8bf')
+  g.addColorStop(0.45, '#ddd2b8')
+  g.addColorStop(0.75, bg)
+  g.addColorStop(1, bg)
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  // Faint tonal patches for matter.
+  for (let i = 0; i < 90; i++) {
+    const r = 8 + Math.random() * 34
+    const v = 208 + Math.floor(Math.random() * 26)
+    const p = ctx.createRadialGradient(0, 0, 0, 0, 0, r)
+    p.addColorStop(0, `rgba(${v},${v - 8},${v - 30},0.22)`)
+    p.addColorStop(1, 'rgba(221,210,184,0)')
+    ctx.save()
+    ctx.translate(size * 0.2 + Math.random() * size * 0.6, size * 0.2 + Math.random() * size * 0.6)
+    ctx.fillStyle = p
+    ctx.fillRect(-r, -r, r * 2, r * 2)
+    ctx.restore()
+  }
+  tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  stageCache.set(bg, tex)
+  return tex
+}
 // Remote albedo cache. URLs are validator-allowlisted, CORS-open, and
 // immutable, so one Texture per URL for the session is correct.
 const mapCache = new Map<string, THREE.Texture>()

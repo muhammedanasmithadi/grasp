@@ -22,7 +22,7 @@ const LABEL_STYLE: React.CSSProperties = {
   pointerEvents: 'none',
 }
 
-import { getGrainTexture, getMapTexture, getGroundTexture, getLinearTexture } from './procedural'
+import { getGrainTexture, getMapTexture, getLinearTexture, getStageTexture } from './procedural'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
@@ -116,7 +116,7 @@ function PartNode({
           clearcoat={0.6}
           clearcoatRoughness={0.25}
           emissive={active || isFault ? base : '#000000'}
-          emissiveIntensity={active || isFault ? 0.9 : 0}
+          emissiveIntensity={active || isFault ? 0.35 : 0}
         />
       </mesh>
       <Html center distanceFactor={8} occlude zIndexRange={[20, 0]}>
@@ -505,7 +505,7 @@ function DslNodeMesh({
             opacity={node.material.opacity ?? 1}
             side={THREE.DoubleSide}
             emissive={active || isFault ? (node.material.emissive ?? base) : '#000000'}
-            emissiveIntensity={active || isFault ? 0.9 : 0}
+            emissiveIntensity={active || isFault ? 0.35 : 0}
           />
         </mesh>
       ) : (
@@ -528,7 +528,7 @@ function DslNodeMesh({
           opacity={node.material.opacity ?? 1}
           side={isTube || node.type === 'plane' || node.type === 'circle' || node.type === 'ring' ? THREE.DoubleSide : THREE.FrontSide}
           emissive={active || isFault ? (node.material.emissive ?? base) : '#000000'}
-          emissiveIntensity={active || isFault ? 0.9 : 0}
+          emissiveIntensity={active || isFault ? 0.35 : 0}
         />
       </mesh>
       )}
@@ -668,9 +668,9 @@ function StageRig({
   )
 }
 
-/** Per-beat focus: when the beat changes, swing the orbit target to
- * the active parts and dolly to their size. User orbits are preserved
- * between beats; only beat changes refocus. */
+/** Per-beat focus: the orbit target glides to the active parts and the
+ * camera dollies to their size. Damped every frame (no jumps), snapped
+ * on scene change. User orbits are preserved between beats. */
 function FocusRig({
   currentBeat,
   sceneKey,
@@ -689,26 +689,33 @@ function FocusRig({
     target: THREE.Vector3
     update: () => void
   } | null
-  const first = useRef(true)
-  useEffect(() => {
-    if (flat || !controls) return
-    // Skip the first mount: StageRig already framed the whole scene.
-    if (first.current) {
-      first.current = false
-      return
+  const goal = useRef({ beat: -1, scene: '', dist: 8 })
+  if (goal.current.scene !== sceneKey) {
+    goal.current.scene = sceneKey
+    goal.current.beat = currentBeat
+    if (!flat && controls) {
+      controls.target.copy(target)
+      controls.update()
     }
-    controls.target.copy(target)
+  } else if (goal.current.beat !== currentBeat) {
+    goal.current.beat = currentBeat
+  }
+  goal.current.dist = Math.max(radius * 3.2, 4)
+  useFrame(() => {
+    if (flat || !controls) return
+    controls.target.lerp(target, 0.06)
+    const persp = camera as THREE.PerspectiveCamera
     const dir = camera.position.clone().sub(controls.target)
     const len = Math.max(dir.length(), 0.001)
+    const want = goal.current.dist
+    const next = len + (want - len) * 0.06
     dir.multiplyScalar(1 / len)
-    const dist = Math.max(radius * 3.2, 4)
-    camera.position.copy(target).addScaledVector(dir, dist)
-    const persp = camera as THREE.PerspectiveCamera
-    persp.near = Math.max(dist / 100, 0.05)
-    persp.far = dist * 30
+    camera.position.copy(controls.target).addScaledVector(dir, next)
+    persp.near = Math.max(next / 100, 0.05)
+    persp.far = next * 30
     persp.updateProjectionMatrix()
     controls.update()
-  }, [currentBeat, sceneKey])
+  })
   return null
 }
 /** Slow drifting dust motes. Cinematic air: the light needs
@@ -777,6 +784,12 @@ function LightRig({ center, radius }: { center: THREE.Vector3; radius: number })
         shadow-normalBias={0.02}
       />
       <directionalLight position={fillPos} intensity={0.4} color="#dfe8ff" />
+      {/* rim: cool edge from back-left, separates subject from backdrop */}
+      <directionalLight
+        position={[center.x - r * 1.4, center.y + r * 1.1, center.z - r * 1.6]}
+        intensity={1.1}
+        color="#f4f8ff"
+      />
     </>
   )
 }
@@ -810,27 +823,42 @@ function groundSafeTint(tint: string, isGround: boolean): string {
   return `#${toHex(mix(r, 0.72))}${toHex(mix(g, 0.67))}${toHex(mix(b, 0.55))}`
 }
 
-/** Textured stage floor that receives real shadows. The model may lay
- * its own planes on top; this guarantees the world never floats in a void. */
-function Ground({
-  y,
-  size,
+/** Museum plinth: the row stands on a low rounded platform, which
+ * sits on a seamless disc that dissolves into the backdrop. One stage,
+ * no seams, no competing slabs. */
+function Stage({
+  topY,
+  subjectR,
+  bg,
   cx,
   cz,
 }: {
-  y: number
-  size: number
+  topY: number
+  subjectR: number
+  bg: string
   cx: number
   cz: number
 }) {
-  // The stage extends just past the frame edge: enough to ground the
-  // subject, never so much it reads as desert. Fog and sky own the rest.
-  const s = Math.max(size * 4, 14)
+  const plinthR = Math.max(subjectR * 1.35 + 0.8, 3)
+  const discR = Math.max(subjectR * 5, 16)
   return (
-    <mesh rotation-x={-Math.PI / 2} position={[cx, y, cz]} receiveShadow>
-      <planeGeometry args={[s, s]} />
-      <meshStandardMaterial map={getGroundTexture()} roughness={0.95} metalness={0} envMapIntensity={0.35} />
-    </mesh>
+    <group>
+      {/* seamless ground disc */}
+      <mesh rotation-x={-Math.PI / 2} position={[cx, topY - 0.34, cz]} receiveShadow>
+        <circleGeometry args={[discR, 64]} />
+        <meshStandardMaterial map={getStageTexture(bg)} roughness={0.96} metalness={0} envMapIntensity={0.3} />
+      </mesh>
+      {/* plinth */}
+      <mesh position={[cx, topY - 0.17, cz]} receiveShadow castShadow>
+        <cylinderGeometry args={[plinthR, plinthR + 0.18, 0.34, 64]} />
+        <meshStandardMaterial color="#efe8d6" roughness={0.85} metalness={0} envMapIntensity={0.4} />
+      </mesh>
+      {/* plinth shadow gap: thin dark reveal under the rim */}
+      <mesh position={[cx, topY - 0.335, cz]}>
+        <cylinderGeometry args={[plinthR + 0.18, plinthR + 0.18, 0.02, 64]} />
+        <meshBasicMaterial color="#4a4136" />
+      </mesh>
+    </group>
   )
 }
 
@@ -1054,6 +1082,8 @@ export default function Scene3D({
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat && spin} autoRotateSpeed={0.5} enableDamping onStart={() => setSpin(false)} />
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={safeBg} flat={isFlat} />
       <FocusRig currentBeat={currentBeat} sceneKey={sceneKey} target={focus.target} radius={focus.radius} flat={isFlat} />
+      <Stage topY={box.min.y - 0.02} subjectR={radius} bg={safeBg} cx={center.x} cz={center.z} />
+      <LightRig center={center} radius={radius} />
       {/* Follow-spot on the active beat: the taught part reads as lit. */}
       {!isFlat && (
         <spotLight
@@ -1064,8 +1094,6 @@ export default function Scene3D({
           color="#ffe9c4"
         />
       )}
-      <LightRig center={center} radius={radius} />
-      <Ground y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />
       <ContactShadows position={[center.x, box.min.y + 0.01, center.z]} scale={Math.max(radius * 5, 12)} far={radius * 2 + 4} resolution={512} blur={2.4} opacity={0.5} color="#2c2418" />
       {!isFlat && <DustMotes center={center} radius={radius} />}
       <Suspense fallback={null}>

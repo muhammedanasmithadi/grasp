@@ -256,9 +256,10 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       if (n.type === "tube" && Array.isArray(n.geometry?.path)) {
         const clamp = (v: number, c: number): number =>
           c + Math.max(-5, Math.min(5, v - c));
+        const base = (geometry ?? n.geometry)!;
         geometry = {
-          ...n.geometry,
-          path: (n.geometry.path as [number, number, number][]).map(
+          ...base,
+          path: (base.path as [number, number, number][]).map(
             ([x, y, z]) => [clamp(x + dx, nx), clamp(y + dy, ny), clamp(z + dz, 0)] as Vec3
           ),
         };

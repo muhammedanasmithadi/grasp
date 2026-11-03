@@ -508,8 +508,10 @@ function StageRig({
   const far = Math.max(radius * 8, 40)
   const domeR = far * 0.45
   const sky = useMemo(() => {
-    const top = new THREE.Color(bg).multiplyScalar(0.62)
-    const bottom = new THREE.Color(bg).multiplyScalar(1.04)
+    const top = new THREE.Color(bg).multiplyScalar(0.6)
+    // The lower hemisphere fills everything past the ground's edge: keep
+    // it below the backdrop so the horizon reads as haze, never white.
+    const bottom = new THREE.Color(bg).multiplyScalar(0.86)
     const geo = new THREE.SphereGeometry(1, 32, 16)
     const mat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
@@ -665,7 +667,7 @@ function Ground({
   cx: number
   cz: number
 }) {
-  const s = Math.max(size * 10, 30)
+  const s = Math.max(size * 16, 44)
   return (
     <mesh rotation-x={-Math.PI / 2} position={[cx, y, cz]} receiveShadow>
       <planeGeometry args={[s, s]} />

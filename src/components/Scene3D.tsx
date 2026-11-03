@@ -834,6 +834,19 @@ export default function Scene3D({
   const size = useMemo(() => box.getSize(new THREE.Vector3()), [box])
   const radius = Math.max(size.x, size.y, size.z) / 2
   const bg = backdrop ?? DEFAULT_BACKDROP
+  // A near-white backdrop whites out fog, dome, and grade with it.
+  // Pull bright backdrops down to warm paper; night scenes unaffected.
+  const safeBg = useMemo(() => {
+    const hex = expandHex(bg)
+    if (!hex) return bg
+    const lum =
+      (0.299 * parseInt(hex.slice(1, 3), 16) +
+        0.587 * parseInt(hex.slice(3, 5), 16) +
+        0.114 * parseInt(hex.slice(5, 7), 16)) /
+      255
+    if (lum <= 0.9) return bg
+    return '#e4d9bd'
+  }, [bg])
   const showAllLabels = focusNodeIds.length === 0
   const labelVisible = (id: string) => showAllLabels || focusNodeIds.includes(id)
 
@@ -850,7 +863,7 @@ export default function Scene3D({
       }}
     >
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat} autoRotateSpeed={0.5} enableDamping />
-      <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={bg} flat={isFlat} />
+      <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={safeBg} flat={isFlat} />
       <LightRig center={center} radius={radius} />
       <Ground y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />
       {!isFlat && <DustMotes center={center} radius={radius} />}

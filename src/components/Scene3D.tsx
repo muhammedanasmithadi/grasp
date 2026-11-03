@@ -1141,6 +1141,11 @@ export default function Scene3D({
       .multiplyScalar(1 / pts.length)
     let r = 1.2
     for (const p of pts) r = Math.max(r, c.distanceTo(p) + 1.2)
+    // Swept-volume margin: joints animate parts ±0.45 and detail
+    // builders overhang node bounds, so the rest-pose frame always
+    // crops motion and trim. +20% and half a unit covers both without
+    // reverting to wide shots.
+    r = r * 1.2 + 0.5
     let member = 0.6
     for (const id of mateIds) {
       const n = visibleNodes.find((v) => v.id === id)

@@ -796,7 +796,7 @@ export default function Scene3D({
       gl={{ antialias: true }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 1.15
+        gl.toneMappingExposure = 1.0
       }}
     >
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat} autoRotateSpeed={0.5} enableDamping />
@@ -836,10 +836,10 @@ export default function Scene3D({
       <CausalLines points={positions} />
       {!isFlat && (
         <EffectComposer multisampling={4}>
-          <Bloom mipmapBlur intensity={0.75} luminanceThreshold={0.72} luminanceSmoothing={0.2} />
+          <Bloom mipmapBlur intensity={0.6} luminanceThreshold={0.85} luminanceSmoothing={0.2} />
           <HueSaturation saturation={0.14} />
           <BrightnessContrast contrast={0.11} />
-          <Vignette eskil={false} offset={0.28} darkness={0.62} />
+          <Vignette eskil={false} offset={0.3} darkness={0.5} />
         </EffectComposer>
       )}
     </Canvas>

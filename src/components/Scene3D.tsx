@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useMemo, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Line, Html, useGLTF, Environment, ContactShadows } from '@react-three/drei'
-import { EffectComposer, Bloom, Vignette, HueSaturation, BrightnessContrast } from '@react-three/postprocessing'
+import { OrbitControls, Line, Html, useGLTF, Environment, ContactShadows, SoftShadows, Lightformer } from '@react-three/drei'
+import { EffectComposer, Bloom, Vignette, HueSaturation, BrightnessContrast, N8AO } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
@@ -888,9 +888,6 @@ class EnvBoundary extends React.Component<
   }
 }
 
-const DEFAULT_HDRI =
-  'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/lythwood_room_1k.hdr'
-
 interface Scene3DProps {
   beats: { id: string | number; title: string; part: string }[]
   currentBeat: number
@@ -906,7 +903,6 @@ interface Scene3DProps {
   playing?: boolean
   medium?: '3d' | '2d' | 'hybrid'
   backdrop?: string
-  hdri?: string
   focusNodeIds?: string[]
   sceneKey?: string
 }
@@ -926,7 +922,6 @@ export default function Scene3D({
   playing = true,
   medium = '3d',
   backdrop,
-  hdri,
   focusNodeIds = [],
   sceneKey = 'scene',
 }: Scene3DProps) {
@@ -1091,6 +1086,7 @@ export default function Scene3D({
       }}
     >
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat && spin} autoRotateSpeed={0.5} enableDamping onStart={() => setSpin(false)} />
+      {!isFlat && <SoftShadows size={12} samples={12} focus={0} />}
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={safeBg} flat={isFlat} />
       <FocusRig currentBeat={currentBeat} sceneKey={sceneKey} target={focus.target} radius={focus.radius} flat={isFlat} />
       <Stage topY={box.min.y - 0.02} subjectR={radius} bg={safeBg} cx={center.x} cz={center.z} />
@@ -1109,7 +1105,15 @@ export default function Scene3D({
       {!isFlat && <DustMotes center={center} radius={radius} />}
       <Suspense fallback={null}>
         <EnvBoundary fallback={<EnvRig />}>
-          <Environment files={hdri ?? DEFAULT_HDRI} />
+          {/* Studio reflections, generated locally: three area strips
+          over a warm room. No downloads, no flake, product-shot metal. */}
+          <Environment resolution={256} frames={1}>
+            <color attach="background" args={['#efe6d2']} />
+            <Lightformer form="rect" intensity={5} position={[0, 5, -9]} scale={[10, 3, 1]} color="#fff4e0" />
+            <Lightformer form="rect" intensity={1.2} position={[-5, 1, -1]} rotation-y={Math.PI / 2} scale={[12, 2, 1]} color="#ffe3c2" />
+            <Lightformer form="rect" intensity={0.9} position={[5, 1, 0]} rotation-y={-Math.PI / 2} scale={[12, 2, 1]} color="#dfe8ff" />
+            <Lightformer form="circle" intensity={0.6} position={[0, -2, 2]} scale={[6, 3, 1]} color="#c9b896" />
+          </Environment>
         </EnvBoundary>
       </Suspense>
       <ClockRig clockRef={clockRef} time={time} playing={playing} />
@@ -1147,6 +1151,7 @@ export default function Scene3D({
       />
       {!isFlat && (
         <EffectComposer multisampling={4}>
+          <N8AO halfRes aoRadius={2} intensity={1.2} quality="performance" />
           <Bloom mipmapBlur intensity={0.45} luminanceThreshold={1.0} luminanceSmoothing={0.25} />
           <HueSaturation saturation={0.14} />
           <BrightnessContrast contrast={0.08} />

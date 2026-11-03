@@ -862,7 +862,7 @@ function Stage({
       {/* plinth: satin product-shot sweep, catches a soft key reflection */}
       <mesh position={[cx, topY - 0.17, cz]} receiveShadow castShadow>
         <cylinderGeometry args={[plinthR, plinthR + 0.18, 0.34, 64]} />
-        <meshPhysicalMaterial color="#ece4d2" roughness={0.32} metalness={0} clearcoat={0.55} clearcoatRoughness={0.3} envMapIntensity={0.7} />
+        <meshPhysicalMaterial color="#e6dcc4" roughness={0.5} metalness={0} clearcoat={0.2} clearcoatRoughness={0.4} envMapIntensity={0.5} />
       </mesh>
       {/* plinth shadow gap: thin dark reveal under the rim */}
       <mesh position={[cx, topY - 0.335, cz]}>

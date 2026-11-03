@@ -203,6 +203,10 @@ export class MetaModelAPI {
   ): Effect.Effect<SceneData, GenerateSceneError> {
     // Deterministic errors never heal on retry (temperature 0): fail
     // fast and let the user rephrase. Only transient errors retry.
+    // Exception: flat-concept rejections (E_MEDIUM_MISMATCH, E_HERO_DULL)
+    // are surfaced for the UI boundary, which runs one guided second
+    // attempt as a flat 2D diagram. A dead end becomes a diagram
+    // instead of an error card.
     const deterministic = (e: GenerateSceneError): boolean =>
       e._tag === "Truncated" ||
       e.message.includes("E_MEDIUM_MISMATCH") ||

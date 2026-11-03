@@ -301,8 +301,25 @@ export default function App() {
       )
       dispatch({ type: 'ASK_SUCCESS', payload: data })
     } catch (err) {
-      console.error('[Grasp] API failed:', (err as Error).message)
-      dispatch({ type: 'ASK_FAILURE', payload: (err as Error).message })
+      const msg = (err as Error).message
+      // Flat dead-ends become diagrams: one guided second attempt that
+      // instructs medium 2d. The original error stands if it fails too.
+      if (/E_MEDIUM_MISMATCH|E_HERO_DULL/.test(msg)) {
+        try {
+          const data2 = await Effect.runPromise(
+            metaModelAPI.generateScene(
+              `${query.trim()} (present this as a flat 2D diagram: medium 2d, labeled cards joined by arrows, no 3D parts or joints)`,
+              (s) => dispatch({ type: 'SET_STAGE', payload: s })
+            )
+          )
+          dispatch({ type: 'ASK_SUCCESS', payload: data2 })
+          return
+        } catch {
+          // fall through to the original error below
+        }
+      }
+      console.error('[Grasp] API failed:', msg)
+      dispatch({ type: 'ASK_FAILURE', payload: msg })
     }
   }, [query])
 

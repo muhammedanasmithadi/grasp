@@ -433,20 +433,20 @@ function DslNodeMesh({
       )
     }
   })
+/** Largest face dimension in world units: boxes use all three axes,
+ * planes and circles their width. Anything 10+ units across is stage,
+ * not subject, whatever way it faces. */
+function faceSizeOf(node: DslNode): number {
+  const a = node.geometry?.args
+  const num = (i: number): number =>
+    (Array.isArray(a) ? Math.abs(Number(a[i]) || 0) : 0) *
+    Math.abs(node.transform.s[i])
+  if (node.type === 'box') return Math.max(num(0), num(1), num(2))
+  if (node.type === 'plane' || node.type === 'circle') return num(0)
+  return 0
+}
   const bigBright = (() => {
-    const a = node.geometry?.args
-    const num = (i: number): number =>
-      (Array.isArray(a) ? Math.abs(Number(a[i]) || 0) : 0) *
-      Math.abs(node.transform.s[i])
-    // Largest face dimension: boxes use all three axes, planes and
-    // circles their width. Anything 10+ units across is stage, not
-    // subject, whatever way it faces (floors and backdrop walls alike).
-    const face =
-      node.type === 'box'
-        ? Math.max(num(0), num(1), num(2))
-        : node.type === 'plane' || node.type === 'circle'
-          ? num(0)
-          : 0
+    const face = faceSizeOf(node)
     if (face < 10) return false
     const hex = expandHex(node.material.tint || color)
     if (!hex) return false
@@ -459,7 +459,12 @@ function DslNodeMesh({
   })()
   const base = isFault
     ? '#D55E00'
-    : liftBlackTint(groundSafeTint(node.material.tint || color, bigBright))
+    : liftBlackTint(
+        brightFaceTint(
+          groundSafeTint(node.material.tint || color, bigBright),
+          faceSizeOf(node)
+        )
+      )
   const autoMap = node.material.map ?? substanceTexture(node)
   const mapTex = autoMap ? getMapTexture(autoMap) : undefined
   // Normal detail rides along: polyhaven albedo URLs have a matching
@@ -809,6 +814,12 @@ function expandHex(tint: string): string | null {
   return /^#[0-9a-fA-F]{6}$/.test(tint) ? tint : null
 }
 
+function mixToward(r: number, g: number, b: number, keep: number, t: [number, number, number]): string {
+  const mix = (c: number, x: number): string =>
+    Math.round((c * keep + x * (1 - keep)) * 255).toString(16).padStart(2, '0')
+  return `#${mix(r, t[0])}${mix(g, t[1])}${mix(b, t[2])}`
+}
+
 function groundSafeTint(tint: string, isGround: boolean): string {
   const hex = expandHex(tint)
   if (!isGround || !hex) return tint
@@ -817,10 +828,21 @@ function groundSafeTint(tint: string, isGround: boolean): string {
   const b = parseInt(hex.slice(5, 7), 16) / 255
   const lum = 0.299 * r + 0.587 * g + 0.114 * b
   if (lum <= 0.8) return tint
-  const mix = (c: number, t: number): number =>
-    Math.round((c * 0.35 + t * 0.65) * 255)
-  const toHex = (v: number): string => v.toString(16).padStart(2, '0')
-  return `#${toHex(mix(r, 0.72))}${toHex(mix(g, 0.67))}${toHex(mix(b, 0.55))}`
+  return mixToward(r, g, b, 0.35, [0.72, 0.67, 0.55])
+}
+
+/** Large bright subject faces (glass trays, white housings) blow out
+ * under the key + spot stack. A gentle pull toward warm paper keeps
+ * them bright but holds detail. Small parts are untouched. */
+export function brightFaceTint(tint: string, face: number): string {
+  const hex = expandHex(tint)
+  if (!hex || face < 4) return tint
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b
+  if (lum <= 0.92) return tint
+  return mixToward(r, g, b, 0.6, [0.85, 0.79, 0.66])
 }
 
 /** Near-black parts read as holes in a warm diorama. Lift them toward

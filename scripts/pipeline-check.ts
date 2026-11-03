@@ -7,7 +7,7 @@ import { adaptDslToScene } from "../src/api/parser.ts";
 import { createMutation } from "../src/api/mutations.ts";
 import { DetailFor } from "../src/components/details.tsx";
 import { injectHero } from "../src/api/hero.ts";
-import { substanceTexture, liftBlackTint } from "../src/components/Scene3D.tsx";
+import { substanceTexture, liftBlackTint, brightFaceTint } from "../src/components/Scene3D.tsx";
 import type { SceneDsl } from "../src/types.ts";
 
 const GOOD = `
@@ -124,6 +124,11 @@ const run = Effect.gen(function* () {
   // 8. Near-black tints lift to warm charcoal; mid tones untouched.
   check("black-lifted", liftBlackTint("#0a0a0a") === "#4a4238", liftBlackTint("#0a0a0a"));
   check("gray-kept", liftBlackTint("#8a8272") === "#8a8272");
+
+  // 9. Large bright faces get a gentle pull; small ones untouched.
+  check("bright-pulled", brightFaceTint("#ffffff", 6) !== "#ffffff", brightFaceTint("#ffffff", 6));
+  check("small-kept", brightFaceTint("#ffffff", 3) === "#ffffff");
+  check("gray-kept2", brightFaceTint("#8a8272", 6) === "#8a8272");
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

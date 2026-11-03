@@ -507,6 +507,7 @@ function StageRig({
   const near = Math.max(radius * 3, 14)
   const far = Math.max(radius * 8, 40)
   const domeR = far * 0.45
+  const fogColor = useMemo(() => new THREE.Color(bg).multiplyScalar(0.88), [bg])
   const sky = useMemo(() => {
     const top = new THREE.Color(bg).multiplyScalar(0.6)
     // The lower hemisphere fills everything past the ground's edge: keep
@@ -547,7 +548,7 @@ function StageRig({
   return (
     <>
       <color attach="background" args={[bg]} />
-      <fog attach="fog" args={[bg, near, far]} />
+      <fog attach="fog" args={[fogColor, near, far]} />
       {!flat && (
         <mesh geometry={sky.geo} material={sky.mat} scale={domeR} renderOrder={-1} />
       )}
@@ -900,9 +901,9 @@ export default function Scene3D({
       <CausalLines points={positions} />
       {!isFlat && (
         <EffectComposer multisampling={4}>
-          <Bloom mipmapBlur intensity={0.6} luminanceThreshold={0.85} luminanceSmoothing={0.2} />
+          <Bloom mipmapBlur intensity={0.6} luminanceThreshold={0.9} luminanceSmoothing={0.2} />
           <HueSaturation saturation={0.14} />
-          <BrightnessContrast contrast={0.11} />
+          <BrightnessContrast contrast={0.08} />
           <Vignette eskil={false} offset={0.3} darkness={0.5} />
         </EffectComposer>
       )}

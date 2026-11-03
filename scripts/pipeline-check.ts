@@ -1,10 +1,11 @@
 // End-to-end pipeline check: model-like builder code in, assertions out.
 // Runs the REAL pipeline: parseSceneCode -> validateSceneDsl ->
-// layoutScene -> adaptDslToScene -> createMutation.
+// layoutScene -> adaptDslToScene -> createMutation -> DetailFor.
 import { Effect } from "effect";
 import { parseSceneCode } from "../src/api/sceneCode.ts";
 import { adaptDslToScene } from "../src/api/parser.ts";
 import { createMutation } from "../src/api/mutations.ts";
+import { DetailFor } from "../src/components/details.tsx";
 import type { SceneDsl } from "../src/types.ts";
 
 const GOOD = `
@@ -73,6 +74,24 @@ const run = Effect.gen(function* () {
   check("mutation-made", !!mut, mut?.kind ?? "none");
   const hidden = mut.hiddenNodeIds;
   check("driver-hidden", hidden.includes(mut.probe.answer), `hidden=${hidden} answer=${mut.probe.answer}`);
+
+  // 4. Detail library: word-matched builders and generic trims exist.
+  const dslNode = (id: string, type: string, label: string) => ({
+    id, type, parent: null,
+    transform: { p: [0, 1, 0], r: [0, 0, 0], s: [1, 1, 1] },
+    material: { roughness: 0.5, metalness: 0.6, tint: "#C9A227" },
+    label, geometry: { args: [1, 1, 1] },
+  });
+  check("detail-valve", DetailFor({ node: dslNode("v", "cylinder", "brass valve") as never }) !== null);
+  check("detail-gear", DetailFor({ node: dslNode("g", "cylinder", "drive gear") as never }) !== null);
+  check("detail-box-trim", DetailFor({ node: dslNode("b", "box", "plain housing") as never }) !== null);
+  check("detail-sphere-none", DetailFor({ node: dslNode("s", "sphere", "plain orb") as never }) === null);
+
+  // 5. Authored slabs strip instead of failing the world.
+  const SLAB = GOOD + 'box({"id":"slab","parent":null,"transform":{"p":[0,0,0],"r":[-1.5708,0,0],"s":[1,1,1]},"material":{"roughness":0.9,"metalness":0,"tint":"#8a8272"},"label":"stage slab","geometry":{"args":[16,0.5,16]}})\n';
+  const withSlab = (yield* parseSceneCode(SLAB)) as SceneDsl;
+  const laidSlab = adaptDslToScene(withSlab).dsl!;
+  check("slab-stripped", !laidSlab.nodes.some((n) => n.id === "slab"), `${laidSlab.nodes.length} nodes kept`);
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

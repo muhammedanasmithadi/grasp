@@ -382,24 +382,33 @@ function DslNodeMesh({
       )
     }
   })
-  const flatLow = (() => {
+  const bigBright = (() => {
     const a = node.geometry?.args
     const num = (i: number): number =>
       (Array.isArray(a) ? Math.abs(Number(a[i]) || 0) : 0) *
       Math.abs(node.transform.s[i])
-    const flatRot =
-      (node.type === 'plane' || node.type === 'circle') &&
-      Math.abs(node.transform.r[0] + Math.PI / 2) < 0.2
-    const thinSlab = node.type === 'box' && num(1) <= 1.5
-    const halfH = node.type === 'box' ? num(1) / 2 : 0.1
-    return (
-      (flatRot || thinSlab) &&
-      node.transform.p[1] - halfH <= floorY + 1.5
-    )
+    // Largest face dimension: boxes use all three axes, planes and
+    // circles their width. Anything 10+ units across is stage, not
+    // subject, whatever way it faces (floors and backdrop walls alike).
+    const face =
+      node.type === 'box'
+        ? Math.max(num(0), num(1), num(2))
+        : node.type === 'plane' || node.type === 'circle'
+          ? num(0)
+          : 0
+    if (face < 10) return false
+    const hex = expandHex(node.material.tint || color)
+    if (!hex) return false
+    const lum =
+      (0.299 * parseInt(hex.slice(1, 3), 16) +
+        0.587 * parseInt(hex.slice(3, 5), 16) +
+        0.114 * parseInt(hex.slice(5, 7), 16)) /
+      255
+    return lum > 0.85
   })()
   const base = isFault
     ? '#D55E00'
-    : groundSafeTint(node.material.tint || color, flatLow)
+    : groundSafeTint(node.material.tint || color, bigBright)
   const isTube = node.type === 'tube'
   const tubeGeo = useTubeGeometry(
     node.type === 'tube' ? (node.geometry?.path as [number, number, number][] | undefined) : undefined,

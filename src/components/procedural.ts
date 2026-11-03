@@ -33,6 +33,7 @@ export function getGrainTexture(): THREE.CanvasTexture {
     ctx.restore()
   }
   const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
   tex.repeat.set(2, 2)
   grain = tex
@@ -84,6 +85,7 @@ export function getGroundTexture(): THREE.CanvasTexture {
     ctx.fillRect(Math.random() * size, Math.random() * size, 1.6, 1.6)
   }
   const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
   tex.repeat.set(7, 7)
   ground = tex

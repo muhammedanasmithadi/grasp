@@ -62,6 +62,7 @@ export interface DslMaterial {
   metalness: number;
   tint: string;
   map?: string;
+  normalMap?: string;
   clearcoat?: number;
   clearcoatRoughness?: number;
   transmission?: number;

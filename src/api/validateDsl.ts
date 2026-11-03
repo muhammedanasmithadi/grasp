@@ -156,15 +156,17 @@ export const validateSceneDsl = (
         }
       }
       const mat = n.material as Record<string, unknown> | undefined;
-      if (mat?.map !== undefined) {
-        const mapUrl = mat.map;
-        if (
-          typeof mapUrl !== "string" ||
-          !TEXTURE_URL_ALLOWLIST.some((prefix) => mapUrl.startsWith(prefix))
-        ) {
-          return yield* fail(
-            `E_MATERIAL_MAP: node "${n.id}" material.map must be an allowlisted texture URL`
-          );
+      for (const field of ["map", "normalMap"] as const) {
+        const url = mat?.[field];
+        if (url !== undefined) {
+          if (
+            typeof url !== "string" ||
+            !TEXTURE_URL_ALLOWLIST.some((prefix) => url.startsWith(prefix))
+          ) {
+            return yield* fail(
+              `E_MATERIAL_MAP: node "${n.id}" material.${field} must be an allowlisted texture URL`
+            );
+          }
         }
       }
     }

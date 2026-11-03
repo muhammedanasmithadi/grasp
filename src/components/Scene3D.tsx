@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useMemo, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, Line, Html, useGLTF, Environment } from '@react-three/drei'
+import { OrbitControls, Line, Html, useGLTF, Environment, ContactShadows } from '@react-three/drei'
 import { EffectComposer, Bloom, Vignette, HueSaturation, BrightnessContrast } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
@@ -22,7 +22,7 @@ const LABEL_STYLE: React.CSSProperties = {
   pointerEvents: 'none',
 }
 
-import { getGrainTexture, getMapTexture, getGroundTexture } from './procedural'
+import { getGrainTexture, getMapTexture, getGroundTexture, getLinearTexture } from './procedural'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
@@ -455,6 +455,14 @@ function DslNodeMesh({
     : groundSafeTint(node.material.tint || color, bigBright)
   const autoMap = node.material.map ?? substanceTexture(node)
   const mapTex = autoMap ? getMapTexture(autoMap) : undefined
+  // Normal detail rides along: polyhaven albedo URLs have a matching
+  // normal map under the same slug, loaded linear (never sRGB).
+  const autoNormal =
+    node.material.normalMap ??
+    (autoMap && autoMap.includes('_diff_1k.jpg')
+      ? autoMap.replace('_diff_1k.jpg', '_nor_dx_1k.jpg')
+      : null)
+  const normalTex = autoNormal ? getLinearTexture(autoNormal) : undefined
   const isTube = node.type === 'tube'
   const tubeGeo = useTubeGeometry(
     node.type === 'tube' ? (node.geometry?.path as [number, number, number][] | undefined) : undefined,
@@ -483,6 +491,7 @@ function DslNodeMesh({
           <meshPhysicalMaterial
             color={base}
             map={mapTex}
+            normalMap={normalTex}
             roughness={node.material.roughness ?? 0.5}
             metalness={node.material.metalness ?? 0.6}
             roughnessMap={getGrainTexture()}
@@ -504,7 +513,8 @@ function DslNodeMesh({
         <GeometryFor node={node} />
         <meshPhysicalMaterial
           color={base}
-          map={node.material.map ? getMapTexture(node.material.map) : undefined}
+          map={mapTex}
+          normalMap={normalTex}
           roughness={node.material.roughness ?? 0.5}
           metalness={node.material.metalness ?? 0.6}
           roughnessMap={getGrainTexture()}
@@ -589,7 +599,7 @@ function StageRig({
   useEffect(() => {
     if (flat) return
     const dir = new THREE.Vector3(1, 0.62, 1.25).normalize()
-    const dist = Math.max(radius * 3.0, 8)
+    const dist = Math.max(radius * 2.8, 7.5)
     camera.position.copy(center).addScaledVector(dir, dist)
     const persp = camera as THREE.PerspectiveCamera
     persp.near = Math.max(dist / 100, 0.1)
@@ -923,6 +933,7 @@ export default function Scene3D({
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={safeBg} flat={isFlat} />
       <LightRig center={center} radius={radius} />
       <Ground y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />
+      <ContactShadows position={[center.x, box.min.y + 0.01, center.z]} scale={Math.max(radius * 5, 12)} far={radius * 2 + 4} resolution={512} blur={2.4} opacity={0.5} color="#2c2418" />
       {!isFlat && <DustMotes center={center} radius={radius} />}
       <Suspense fallback={null}>
         <EnvBoundary fallback={<EnvRig />}>
@@ -960,7 +971,7 @@ export default function Scene3D({
           <Bloom mipmapBlur intensity={0.6} luminanceThreshold={0.9} luminanceSmoothing={0.2} />
           <HueSaturation saturation={0.14} />
           <BrightnessContrast contrast={0.08} />
-          <Vignette eskil={false} offset={0.3} darkness={0.5} />
+          <Vignette eskil={false} offset={0.32} darkness={0.35} />
         </EffectComposer>
       )}
     </Canvas>

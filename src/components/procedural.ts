@@ -55,6 +55,20 @@ export function getMapTexture(url: string): THREE.Texture {
   return tex
 }
 
+// Linear (non-color) data textures: normal maps must not be sRGB
+// decoded or the lighting math reads them wrong.
+const linearCache = new Map<string, THREE.Texture>()
+
+export function getLinearTexture(url: string): THREE.Texture {
+  let tex = linearCache.get(url)
+  if (!tex) {
+    tex = new THREE.TextureLoader().load(url)
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+    linearCache.set(url, tex)
+  }
+  return tex
+}
+
 // Large-scale warm ground: fine grain over soft tonal patches so the
 // stage reads as matter, not a void. Tiled with wrapping.
 let ground: THREE.CanvasTexture | null = null

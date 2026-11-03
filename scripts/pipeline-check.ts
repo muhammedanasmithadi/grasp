@@ -65,9 +65,13 @@ const run = Effect.gen(function* () {
   check("tube-clamped", reach <= 5.01, `reach=${reach.toFixed(2)}`);
   check("beats-mapped", scene.beats.length === 4 && scene.causalSpine.length === 4);
 
-  // 2. Duplicate spine labels rejected.
-  const dup = yield* Effect.flip(parseSceneCode(DUP_SPINE));
-  check("spine-dup-rejected", (dup as Error).message.includes("E_SPINE_DUP"), (dup as Error).message.slice(0, 40));
+  // 2. Duplicate spine beats merge instead of failing the world.
+  const merged = (yield* parseSceneCode(DUP_SPINE)) as SceneDsl;
+  const mergedLabels = merged.beats.map((b) => {
+    const n = merged.nodes.find((x) => x.id === (b.becauseOf as string[])[0]);
+    return (n?.label ?? "").toLowerCase();
+  });
+  check("spine-merged", merged.beats.length === 3 && new Set(mergedLabels).size === 3, `${merged.beats.length} beats`);
 
   // 3. Drill visibly breaks: true driver hidden on the drill beat.
   const mut = createMutation(laid, "deadbolt-test")!;

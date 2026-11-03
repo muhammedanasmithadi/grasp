@@ -470,6 +470,22 @@ export function parseSceneCode(
         "E_CODE_MISSING: scene needs at least one beat({...}) call"
       );
     }
+    // Distinct-spine repair: the model repeats part names despite the
+    // prompt. Merge repeats silently (keep the first beat per part)
+    // instead of failing the world; the validator stays as backstop.
+    const labelOf = (id: unknown): string => {
+      const n = (builder.nodes as Record<string, unknown>[]).find((x) => x.id === id);
+      return typeof n?.label === "string" ? (n.label as string).toLowerCase() : String(id ?? "");
+    };
+    const seen = new Set<string>();
+    const beats = (builder.beats as Record<string, unknown>[]).filter((b) => {
+      const refs = b.becauseOf as unknown;
+      const first = Array.isArray(refs) ? refs[0] : undefined;
+      const key = labelOf(first);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     const dsl = {
       dslVersion: "0.1",
       concept: builder.concept,
@@ -483,7 +499,7 @@ export function parseSceneCode(
       groups: builder.groups,
       flows: [],
       camera: builder.camera ?? { axisOfAction: [0, 1, 0], shots: [] },
-      beats: builder.beats,
+      beats,
       audio: { layers: ["ambience", "mech"] },
     };
     return yield* validateSceneDsl(dsl);

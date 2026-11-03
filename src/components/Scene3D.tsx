@@ -323,6 +323,7 @@ function DslNodeMesh({
   joints,
   clockRef,
   showLabel,
+  floorY,
 }: {
   node: DslNode
   active: boolean
@@ -331,6 +332,7 @@ function DslNodeMesh({
   joints: DslJoint[]
   clockRef: React.MutableRefObject<number>
   showLabel: boolean
+  floorY: number
 }) {
   const groupRef = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null!)
@@ -380,15 +382,24 @@ function DslNodeMesh({
       )
     }
   })
-  const slabSpan = (() => {
-    if (node.type !== 'plane' && node.type !== 'circle') return 0
+  const flatLow = (() => {
     const a = node.geometry?.args
-    const w = Array.isArray(a) ? Math.abs(Number(a[0]) || 0) : 0
-    return w * Math.abs(node.transform.s[0])
+    const num = (i: number): number =>
+      (Array.isArray(a) ? Math.abs(Number(a[i]) || 0) : 0) *
+      Math.abs(node.transform.s[i])
+    const flatRot =
+      (node.type === 'plane' || node.type === 'circle') &&
+      Math.abs(node.transform.r[0] + Math.PI / 2) < 0.2
+    const thinSlab = node.type === 'box' && num(1) <= 1.5
+    const halfH = node.type === 'box' ? num(1) / 2 : 0.1
+    return (
+      (flatRot || thinSlab) &&
+      node.transform.p[1] - halfH <= floorY + 1.5
+    )
   })()
   const base = isFault
     ? '#D55E00'
-    : groundSafeTint(node.material.tint || color, slabSpan >= 8)
+    : groundSafeTint(node.material.tint || color, flatLow)
   const isTube = node.type === 'tube'
   const tubeGeo = useTubeGeometry(
     node.type === 'tube' ? (node.geometry?.path as [number, number, number][] | undefined) : undefined,
@@ -612,19 +623,31 @@ function LightRig({ center, radius }: { center: THREE.Vector3; radius: number })
   )
 }
 
-/** Ground planes must never be near-white: one blown-out disc plus a
- * strong key reads as a void, not a stage. Clamp bright ground tints
- * toward warm gray at render time (the prompt already forbids them,
- * but clamping always works while rejection just fails the world). */
+/** Grounds must never be near-white: one blown-out disc plus a
+ * strong key reads as a void, not a stage. Any flat thing sitting on
+ * the world floor gets its bright tints pulled toward warm gray at
+ * render time (the prompt already forbids them, but clamping always
+ * works while rejection just fails the world). Clouds stay white:
+ * only floor-dwellers are touched. */
+function expandHex(tint: string): string | null {
+  const short = /^#([0-9a-fA-F]{3})$/.exec(tint)
+  if (short) {
+    const c = short[1]
+    return `#${c[0]}${c[0]}${c[1]}${c[1]}${c[2]}${c[2]}`
+  }
+  return /^#[0-9a-fA-F]{6}$/.test(tint) ? tint : null
+}
+
 function groundSafeTint(tint: string, isGround: boolean): string {
-  if (!isGround || !/^#[0-9a-fA-F]{6}$/.test(tint)) return tint
-  const r = parseInt(tint.slice(1, 3), 16) / 255
-  const g = parseInt(tint.slice(3, 5), 16) / 255
-  const b = parseInt(tint.slice(5, 7), 16) / 255
+  const hex = expandHex(tint)
+  if (!isGround || !hex) return tint
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
   const lum = 0.299 * r + 0.587 * g + 0.114 * b
-  if (lum <= 0.85) return tint
+  if (lum <= 0.8) return tint
   const mix = (c: number, t: number): number =>
-    Math.round((c * 0.4 + t * 0.6) * 255)
+    Math.round((c * 0.35 + t * 0.65) * 255)
   const toHex = (v: number): string => v.toString(16).padStart(2, '0')
   return `#${toHex(mix(r, 0.72))}${toHex(mix(g, 0.67))}${toHex(mix(b, 0.55))}`
 }
@@ -846,6 +869,7 @@ export default function Scene3D({
               joints={jointsByNode(n.id)}
               clockRef={clockRef}
               showLabel={labelVisible(n.id)}
+              floorY={box.min.y}
             />
           ))
         : beats.map((b, i) => (

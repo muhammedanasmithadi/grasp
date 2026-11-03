@@ -844,6 +844,7 @@ export default function Scene3D({
   const size = useMemo(() => box.getSize(new THREE.Vector3()), [box])
   const radius = Math.max(size.x, size.y, size.z) / 2
   const bg = backdrop ?? DEFAULT_BACKDROP
+  const [spin, setSpin] = useState(true)
   // A near-white backdrop whites out fog, dome, and grade with it.
   // Pull bright backdrops down to warm paper; night scenes unaffected.
   const safeBg = useMemo(() => {
@@ -872,7 +873,7 @@ export default function Scene3D({
         gl.toneMappingExposure = 0.9
       }}
     >
-      <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat} autoRotateSpeed={0.5} enableDamping />
+      <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat && spin} autoRotateSpeed={0.5} enableDamping onStart={() => setSpin(false)} />
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={safeBg} flat={isFlat} />
       <LightRig center={center} radius={radius} />
       <Ground y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />

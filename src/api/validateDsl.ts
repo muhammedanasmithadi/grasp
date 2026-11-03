@@ -187,11 +187,15 @@ export const validateSceneDsl = (
       }
     }
 
+    if ((d.beats as unknown[]).length < 3) {
+      return yield* fail(
+        "E_BEAT_COUNT: a teaching world needs at least 3 beats"
+      );
+    }
     for (const b of d.beats as Record<string, unknown>[]) {
       if (typeof b.id !== "string" || !b.id) {
         return yield* fail("E_BEAT_ID: every beat needs a string id");
-      }
-      const refs = b.becauseOf as unknown;
+      }      const refs = b.becauseOf as unknown;
       if (!Array.isArray(refs) || refs.length === 0) {
         return yield* fail(
           `E_BEAT_CAUSE: beat "${b.id}" needs non-empty becauseOf[]`

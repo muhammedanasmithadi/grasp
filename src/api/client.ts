@@ -197,7 +197,8 @@ export class MetaModelAPI {
     const deterministic = (e: GenerateSceneError): boolean =>
       e._tag === "Truncated" ||
       e.message.includes("E_MEDIUM_MISMATCH") ||
-      e.message.includes("E_HERO_DULL");
+      e.message.includes("E_HERO_DULL") ||
+      e.message.includes("E_BEAT_COUNT");
     return Effect.retry(singleAttempt(concept, onStage), {
       times: MAX_ATTEMPTS - 1,
       schedule: Schedule.exponential("1 second"),

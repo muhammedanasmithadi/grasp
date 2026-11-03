@@ -297,8 +297,8 @@ export default function App() {
                 </form>
                 {apiError && (
                   <div className="mt-3 p-3 border-2 border-a04000 bg-fdeee2 text-[10px] font-bold text-a04000 rounded w-full flex items-center gap-3">
-                    <span className="flex-1">API unavailable — {apiError}{/E_MEDIUM_MISMATCH|E_HERO_DULL|E_TRUNCATED/.test(apiError) ? ' Try rephrasing with moving 3D parts.' : ''}</span>
-                    {/E_MEDIUM_MISMATCH|E_HERO_DULL|E_TRUNCATED/.test(apiError) ? (
+                    <span className="flex-1">API unavailable — {apiError}{/E_MEDIUM_MISMATCH|E_HERO_DULL|E_TRUNCATED|E_BEAT_COUNT/.test(apiError) ? ' Try rephrasing with moving 3D parts.' : ''}</span>
+                    {/E_MEDIUM_MISMATCH|E_HERO_DULL|E_TRUNCATED|E_BEAT_COUNT/.test(apiError) ? (
                       <button
                         className="shrink-0 px-4 py-2 border-2 border-a04000 bg-white text-a04000 uppercase tracking-widest hover:bg-a04000 hover:text-white transition-all"
                         onClick={() => {

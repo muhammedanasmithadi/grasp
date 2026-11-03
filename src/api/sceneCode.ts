@@ -54,6 +54,7 @@ const CALL_NAMES = new Set([
   "hinge",
   "slider",
   "gear",
+  "group",
   "beat",
   "camera",
 ]);
@@ -242,6 +243,7 @@ interface Builder {
   theme?: Record<string, unknown>;
   nodes: Record<string, unknown>[];
   joints: Record<string, unknown>[];
+  groups: Record<string, unknown>[];
   beats: Record<string, unknown>[];
   camera?: Record<string, unknown>;
 }
@@ -397,6 +399,9 @@ function execCall(
       case "beat":
         builder.beats.push(a);
         break;
+      case "group":
+        builder.groups.push(a);
+        break;
       case "camera":
         builder.camera = a;
         break;
@@ -448,7 +453,7 @@ export function parseSceneCode(
     if (stmts.length === 0) {
       return yield* fail("E_CODE_EMPTY: no statements found");
     }
-    const builder: Builder = { nodes: [], joints: [], beats: [] };
+    const builder: Builder = { nodes: [], joints: [], groups: [], beats: [] };
     yield* execStmts(builder, stmts, {});
     if (!builder.concept) {
       return yield* fail(
@@ -475,6 +480,7 @@ export function parseSceneCode(
       },
       nodes: builder.nodes,
       joints: builder.joints,
+      groups: builder.groups,
       flows: [],
       camera: builder.camera ?? { axisOfAction: [0, 1, 0], shots: [] },
       beats: builder.beats,

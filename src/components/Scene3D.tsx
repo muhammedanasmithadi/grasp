@@ -5,7 +5,7 @@ import { EffectComposer, Bloom, Vignette, HueSaturation, BrightnessContrast } fr
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
-import type { DslNode, DslJoint } from '../types'
+import type { DslNode, DslJoint, DslGroup } from '../types'
 
 const DEFAULT_BACKDROP = '#e9e4d6'
 
@@ -543,6 +543,53 @@ function DslNodeMesh({
   )
 }
 
+/** One label per compound group, pinned at the centroid of its visible
+ * members. Members never self-label: the assembly reads as one part. */
+function GroupLabels({
+  groups,
+  positions,
+  focusNodeIds,
+  showAll,
+  faultNodeIds,
+}: {
+  groups: DslGroup[]
+  positions: Map<string, THREE.Vector3>
+  focusNodeIds: string[]
+  showAll: boolean
+  faultNodeIds: string[]
+}) {
+  return (
+    <>
+      {groups.map((g) => {
+        const pts = g.members
+          .map((m) => positions.get(m))
+          .filter((p): p is THREE.Vector3 => !!p)
+        if (pts.length === 0) return null
+        if (!showAll && !g.members.some((m) => focusNodeIds.includes(m))) return null
+        const c = pts
+          .reduce((acc, p) => acc.add(p), new THREE.Vector3())
+          .multiplyScalar(1 / pts.length)
+        const isFault = g.members.some((m) => faultNodeIds.includes(m))
+        return (
+          <group key={g.id} position={c}>
+            <Html center distanceFactor={10} occlude zIndexRange={[20, 0]}>
+              <div
+                style={{
+                  ...LABEL_STYLE,
+                  ...(isFault
+                    ? { color: '#D55E00', border: '1px solid #D55E00' }
+                    : {}),
+                }}
+              >
+                {g.label}
+              </div>
+            </Html>
+          </group>
+        )
+      })}
+    </>
+  )
+}
 function CausalLines({ points }: { points: THREE.Vector3[] }) {
   if (points.length < 2) return null
   const flat: number[] = []
@@ -770,6 +817,7 @@ interface Scene3DProps {
   faultNodeIds?: string[]
   hiddenNodeIds?: string[]
   joints?: DslJoint[]
+  groups?: DslGroup[]
   time?: number
   playing?: boolean
   medium?: '3d' | '2d' | 'hybrid'
@@ -789,6 +837,7 @@ export default function Scene3D({
   faultNodeIds = [],
   hiddenNodeIds = [],
   joints = [],
+  groups = [],
   time = 0,
   playing = true,
   medium = '3d',
@@ -915,7 +964,20 @@ export default function Scene3D({
     return '#e4d9bd'
   }, [bg])
   const showAllLabels = focusNodeIds.length === 0
-  const labelVisible = (id: string) => showAllLabels || focusNodeIds.includes(id)
+  const memberToGroup = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const g of groups) for (const id of g.members) m.set(id, g.id)
+    return m
+  }, [groups])
+  const labelVisible = (id: string) =>
+    (showAllLabels || focusNodeIds.includes(id)) && !memberToGroup.has(id)
+  const nodePositions = useMemo(() => {
+    const m = new Map<string, THREE.Vector3>()
+    visibleNodes.forEach((n) =>
+      m.set(n.id, new THREE.Vector3(n.transform.p[0], n.transform.p[1], n.transform.p[2]))
+    )
+    return m
+  }, [JSON.stringify(visibleNodes.map((n) => [n.id, n.transform.p]))])
 
   return (
     <Canvas
@@ -966,6 +1028,13 @@ export default function Scene3D({
             />
           ))}
       <CausalLines points={positions} />
+      <GroupLabels
+        groups={groups}
+        positions={nodePositions}
+        focusNodeIds={focusNodeIds}
+        showAll={showAllLabels}
+        faultNodeIds={sabotageMode ? faultNodeIds : []}
+      />
       {!isFlat && (
         <EffectComposer multisampling={4}>
           <Bloom mipmapBlur intensity={0.6} luminanceThreshold={0.9} luminanceSmoothing={0.2} />

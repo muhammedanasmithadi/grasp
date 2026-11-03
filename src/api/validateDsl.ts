@@ -171,6 +171,44 @@ export const validateSceneDsl = (
       }
     }
 
+    // Compound groups: 2+ primitives sharing one label. Members must
+    // exist, groups must not overlap, singles are pointless.
+    if (d.groups !== undefined && !Array.isArray(d.groups)) {
+      return yield* fail("E_GROUP_TYPE: groups must be an array");
+    }
+    const grouped = new Set<string>();
+    const groupIds = new Set<string>();
+    for (const g of (Array.isArray(d.groups) ? d.groups : []) as Record<string, unknown>[]) {
+      if (typeof g.id !== "string" || !g.id) {
+        return yield* fail("E_GROUP_ID: every group needs a string id");
+      }
+      if (groupIds.has(g.id)) {
+        return yield* fail(`E_GROUP_DUP: duplicate group id "${g.id}"`);
+      }
+      groupIds.add(g.id);
+      if (typeof g.label !== "string" || !g.label) {
+        return yield* fail(`E_GROUP_LABEL: group "${g.id}" needs a label`);
+      }
+      if (!Array.isArray(g.members) || g.members.length < 2) {
+        return yield* fail(
+          `E_GROUP_SIZE: group "${g.id}" needs at least 2 members`
+        );
+      }
+      for (const m of g.members) {
+        if (typeof m !== "string" || !nodeIds.has(m)) {
+          return yield* fail(
+            `E_GROUP_REF: group "${g.id}" references unknown node "${String(m)}"`
+          );
+        }
+        if (grouped.has(m)) {
+          return yield* fail(
+            `E_GROUP_OVERLAP: node "${m}" is already grouped`
+          );
+        }
+        grouped.add(m);
+      }
+    }
+
     for (const j of d.joints as Record<string, unknown>[]) {
       if (!JOINTS.has(j.type as string)) {
         return yield* fail(

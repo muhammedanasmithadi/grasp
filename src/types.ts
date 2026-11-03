@@ -150,12 +150,19 @@ export interface DslTheme {
   hdri?: string;
 }
 
+export interface DslGroup {
+  id: string;
+  label: string;
+  members: string[];
+}
+
 export interface SceneDsl {
   dslVersion: '0.1';
   concept: DslConcept;
   theme: DslTheme;
   nodes: DslNode[];
   joints: DslJoint[];
+  groups: DslGroup[];
   flows: unknown[];
   camera: DslCamera;
   beats: DslBeat[];

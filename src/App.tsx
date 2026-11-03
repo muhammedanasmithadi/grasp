@@ -357,6 +357,7 @@ export default function App() {
                       faultNodeIds={shownFaultNodeIds}
                       hiddenNodeIds={shownHiddenNodeIds}
                       joints={dslJoints}
+                      groups={sceneData?.dsl?.groups ?? []}
                       time={beatTime}
                       playing
                       medium={medium}

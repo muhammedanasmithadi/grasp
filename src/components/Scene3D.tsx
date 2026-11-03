@@ -859,10 +859,10 @@ function Stage({
         <circleGeometry args={[discR, 64]} />
         <meshStandardMaterial map={getStageTexture(bg)} roughness={0.96} metalness={0} envMapIntensity={0.3} />
       </mesh>
-      {/* plinth */}
+      {/* plinth: satin product-shot sweep, catches a soft key reflection */}
       <mesh position={[cx, topY - 0.17, cz]} receiveShadow castShadow>
         <cylinderGeometry args={[plinthR, plinthR + 0.18, 0.34, 64]} />
-        <meshStandardMaterial color="#efe8d6" roughness={0.85} metalness={0} envMapIntensity={0.4} />
+        <meshPhysicalMaterial color="#ece4d2" roughness={0.32} metalness={0} clearcoat={0.55} clearcoatRoughness={0.3} envMapIntensity={0.7} />
       </mesh>
       {/* plinth shadow gap: thin dark reveal under the rim */}
       <mesh position={[cx, topY - 0.335, cz]}>
@@ -1087,7 +1087,7 @@ export default function Scene3D({
       gl={{ antialias: true }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 0.9
+        gl.toneMappingExposure = 1.05
       }}
     >
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat && spin} autoRotateSpeed={0.5} enableDamping onStart={() => setSpin(false)} />

@@ -86,6 +86,7 @@ export function getMapTexture(url: string): THREE.Texture {
     tex = new THREE.TextureLoader().load(url)
     tex.colorSpace = THREE.SRGBColorSpace
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+    tex.anisotropy = 8
     mapCache.set(url, tex)
   }
   return tex

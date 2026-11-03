@@ -5,11 +5,13 @@
 
 import type { SceneData, SceneDsl } from "../types";
 import { layoutScene } from "./layout";
+import { injectHero } from "./hero";
 
 export function adaptDslToScene(input: SceneDsl): SceneData {
-  // Code owns the stage: re-seat every part in causal order before
+  // Code owns the stage: inject a photoreal hero scan when the concept
+  // names one we hold, then re-seat every part in causal order before
   // the UI ever sees it. Model positions are hints, not placements.
-  const dsl = layoutScene(input);
+  const dsl = layoutScene(injectHero(input));
   const labelOf = (id: string): string => {
     const n = dsl.nodes.find((x) => x.id === id);
     return n ? n.label : id;

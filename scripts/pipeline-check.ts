@@ -6,6 +6,7 @@ import { parseSceneCode } from "../src/api/sceneCode.ts";
 import { adaptDslToScene } from "../src/api/parser.ts";
 import { createMutation } from "../src/api/mutations.ts";
 import { DetailFor } from "../src/components/details.tsx";
+import { injectHero } from "../src/api/hero.ts";
 import type { SceneDsl } from "../src/types.ts";
 
 const GOOD = `
@@ -96,6 +97,16 @@ const run = Effect.gen(function* () {
   const withSlab = (yield* parseSceneCode(SLAB)) as SceneDsl;
   const laidSlab = adaptDslToScene(withSlab).dsl!;
   check("slab-stripped", !laidSlab.nodes.some((n) => n.id === "slab"), `${laidSlab.nodes.length} nodes kept`);
+
+  // 6. Hero injection: matching concepts gain a verified scan, others untouched.
+  const drillDsl = { ...laid, concept: { ...laid.concept, question: "how a power drill drives screws" } };
+  const withHero = injectHero(drillDsl as SceneDsl);
+  check("hero-injected", withHero.nodes.some((n) => n.id === "hero-scan" && n.type === "model"), `${withHero.nodes.length} nodes`);
+  check("hero-grouped", withHero.groups[0]?.members.includes("hero-scan") ?? false);
+  const noHero = injectHero(laid);
+  check("hero-skipped", noHero.nodes.length === laid.nodes.length);
+  const dupHero = injectHero(withHero);
+  check("hero-once", dupHero.nodes.filter((n) => n.id === "hero-scan").length === 1);
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

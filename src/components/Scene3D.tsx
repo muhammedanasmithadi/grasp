@@ -1046,7 +1046,10 @@ export default function Scene3D({
   const labelVisible = (id: string) =>
     (showAllLabels || focusNodeIds.includes(id)) && !memberToGroup.has(id)
   // Beat focus: centroid and radius of the currently active parts.
-  // Falls back to the whole-scene frame when nothing is active.
+  // Falls back to the whole-scene frame when nothing is active. The
+  // distance respects the biggest member, not just the spread: a lone
+  // 3-unit lever at min distance fills the frame and reads as an
+  // accident, not a close-up.
   const focus = useMemo(() => {
     const pts = focusNodeIds
       .map((id) => nodePositions.get(id))
@@ -1057,7 +1060,12 @@ export default function Scene3D({
       .multiplyScalar(1 / pts.length)
     let r = 1.2
     for (const p of pts) r = Math.max(r, c.distanceTo(p) + 1.2)
-    return { target: c, radius: Math.min(r, radius) }
+    let member = 0.6
+    for (const id of focusNodeIds) {
+      const n = visibleNodes.find((v) => v.id === id)
+      if (n) member = Math.max(member, estimateExtents(n).hx)
+    }
+    return { target: c, radius: Math.min(Math.max(r, member * 1.9), radius) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(focusNodeIds), center, radius])
 

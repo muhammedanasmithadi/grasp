@@ -54,8 +54,8 @@ const run = Effect.gen(function* () {
   // Uniform presence: solid primitives sized into [0.4, 2.2] half-extent.
   const housing = laid.nodes.find((n) => n.id === "housing")!;
   const spring = laid.nodes.find((n) => n.id === "spring")!;
-  check("giant-shrunk", Math.abs(housing.transform.s[0] - 2.2 / 4) < 0.01, `s=${housing.transform.s[0].toFixed(3)}`);
-  check("speck-grown", Math.abs(spring.transform.s[0] - 0.4 / 0.05) < 0.01, `s=${spring.transform.s[0].toFixed(2)}`);
+  check("giant-shrunk", Math.abs(housing.transform.s[0] - 1.6 / 4) < 0.01, `s=${housing.transform.s[0].toFixed(3)}`);
+  check("speck-grown", Math.abs(spring.transform.s[0] - 0.5 / 0.05) < 0.01, `s=${spring.transform.s[0].toFixed(2)}`);
   // Stability: laying out twice changes nothing (steady frame).
   const twice = adaptDslToScene(laid).dsl!;
   const same = JSON.stringify(twice.nodes.map((n) => n.transform)) === JSON.stringify(laid.nodes.map((n) => n.transform));

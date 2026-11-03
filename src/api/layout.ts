@@ -199,7 +199,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       n.type === "plane" || n.type === "circle" || n.type === "ring"
     ) continue;
     const e = ext.get(n.id)!;
-    const clamped = Math.min(Math.max(e.hx, 0.4), 2.2);
+    const clamped = Math.min(Math.max(e.hx, 0.5), 1.6);
     const k = clamped / e.hx;
     if (Math.abs(k - 1) < 0.01) continue;
     const s = n.transform.s;

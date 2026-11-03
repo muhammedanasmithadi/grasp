@@ -662,7 +662,10 @@ function StageRig({
   }, [bg])
   useEffect(() => {
     if (flat) return
-    const dir = new THREE.Vector3(1, 0.62, 1.25).normalize()
+    // The row runs along X with alternating z. Photograph it from the
+    // front-side, never down its length: a diagonal view foreshortens
+    // the street and drags edge-neighbors into the frame.
+    const dir = new THREE.Vector3(0.35, 0.6, 1).normalize()
     const dist = Math.max(radius * 2.4, 6.5)
     camera.position.copy(center).addScaledVector(dir, dist)
     const persp = camera as THREE.PerspectiveCamera
@@ -710,7 +713,10 @@ function FocusRig({
   } | null
   useEffect(() => {
     if (flat || !controls) return
-    const dir = new THREE.Vector3(1, 0.62, 1.25).normalize()
+    // The row runs along X with alternating z. Photograph it from the
+    // front-side, never down its length: a diagonal view foreshortens
+    // the street and drags edge-neighbors into the frame.
+    const dir = new THREE.Vector3(0.35, 0.6, 1).normalize()
     const dist = Math.max(radius * 3.6, 6.5)
     controls.target.copy(target)
     camera.position.copy(target).addScaledVector(dir, dist)

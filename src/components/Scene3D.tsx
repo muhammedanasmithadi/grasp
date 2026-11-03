@@ -646,7 +646,7 @@ function StageRig({
   useEffect(() => {
     if (flat) return
     const dir = new THREE.Vector3(1, 0.62, 1.25).normalize()
-    const dist = Math.max(radius * 2.8, 7.5)
+    const dist = Math.max(radius * 2.4, 6.5)
     camera.position.copy(center).addScaledVector(dir, dist)
     const persp = camera as THREE.PerspectiveCamera
     persp.near = Math.max(dist / 100, 0.1)
@@ -780,7 +780,9 @@ function Ground({
   cx: number
   cz: number
 }) {
-  const s = Math.max(size * 16, 44)
+  // The stage extends just past the frame edge: enough to ground the
+  // subject, never so much it reads as desert. Fog and sky own the rest.
+  const s = Math.max(size * 4, 14)
   return (
     <mesh rotation-x={-Math.PI / 2} position={[cx, y, cz]} receiveShadow>
       <planeGeometry args={[s, s]} />

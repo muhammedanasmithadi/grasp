@@ -395,8 +395,12 @@ function DslNodeMesh({
       const rpm = j.driver?.rpm ?? 30
       const omega = ((rpm / 60) * Math.PI * 2 * t) % (Math.PI * 2)
       if (j.type === 'slider') {
+        // Sliders shuttle along their axis. Amplitude is clamped: the
+        // model often passes degree-like ranges (e.g. [0, 360]) that
+        // would fling seated parts across the stage. Oscillation must
+        // read as motion, never as displacement.
         const span = j.range[1] - j.range[0]
-        const amp = span / 2
+        const amp = Math.min(span / 2, 0.45)
         const off = amp * Math.sin(omega)
         const len = Math.hypot(j.axis[0], j.axis[1], j.axis[2]) || 1
         ox += (j.axis[0] / len) * off

@@ -158,7 +158,9 @@ function DrillPanel({
 }) {
   const options = useMemo(() => {
     const answer = dslNodes.find((n) => n.id === probeAnswer)
-    const rest = dslNodes.filter((n) => n.id !== probeAnswer)
+    // Distinct labels only: two nodes can share a word, but the four
+    // choices must read differently or the drill is unfair.
+    const rest = dslNodes.filter((n) => n.id !== probeAnswer && n.label.toLowerCase() !== answer?.label.toLowerCase())
     // Deterministic order: answer first, then others; rotate by answer
     // length so the correct choice is not always on top.
     const ordered = answer ? [answer, ...rest.slice(0, 3)] : rest.slice(0, 4)

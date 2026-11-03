@@ -605,7 +605,7 @@ function CausalLines({ points }: { points: THREE.Vector3[] }) {
   if (points.length < 2) return null
   const flat: number[] = []
   points.forEach((p) => flat.push(p.x, p.y, p.z))
-  return <Line points={flat} color="#c9ba9e" linewidth={2} dashed={true} dashScale={0.8} />
+  return <Line points={flat} color="#c9ba9e" linewidth={2} dashed={true} dashScale={0.8} transparent opacity={0.45} />
 }
 
 /** Backdrop, fog, and auto-framing. Reframes only when the scene changes. */

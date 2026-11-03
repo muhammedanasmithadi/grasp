@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useMemo, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Line, Html, useGLTF, Environment } from '@react-three/drei'
+import { EffectComposer, Bloom, Vignette, HueSaturation, BrightnessContrast } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import type { DslNode, DslJoint } from '../types'
@@ -533,11 +534,47 @@ function StageRig({
   )
 }
 
-/** Key with fitted shadows, cool fill, warm hemisphere bounce. */
+/** Slow drifting dust motes. Cinematic air: the light needs
+ * something to live in. Additive, faint, always moving. */
+function DustMotes({ center, radius }: { center: THREE.Vector3; radius: number }) {
+  const ref = useRef<THREE.Points>(null!)
+  const positions = useMemo(() => {
+    const count = 140
+    const arr = new Float32Array(count * 3)
+    const r = Math.max(radius * 1.6, 4)
+    for (let i = 0; i < count; i++) {
+      arr[i * 3] = center.x + (Math.random() - 0.5) * 2 * r
+      arr[i * 3 + 1] = center.y + (Math.random() - 0.5) * 2 * r
+      arr[i * 3 + 2] = center.z + (Math.random() - 0.5) * 2 * r
+    }
+    return arr
+  }, [center, radius])
+  useFrame((_, delta) => {
+    if (ref.current) ref.current.rotation.y += delta * 0.014
+  })
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.045}
+        color="#ffe9c4"
+        transparent
+        opacity={0.32}
+        sizeAttenuation
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  )
+}
+
+/** Golden-hour key with fitted shadows, cool fill, warm hemisphere bounce. */
 function LightRig({ center, radius }: { center: THREE.Vector3; radius: number }) {
   const r = Math.max(radius, 4)
   const keyPos = useMemo(
-    () => center.clone().add(new THREE.Vector3(r * 0.9, r * 1.4, r * 0.7)),
+    () => center.clone().add(new THREE.Vector3(r * 1.25, r * 0.62, r * 0.95)),
     [center, radius]
   )
   const fillPos = useMemo(
@@ -549,8 +586,8 @@ function LightRig({ center, radius }: { center: THREE.Vector3; radius: number })
       <hemisphereLight args={['#fffaf0', '#9a8f78', 0.55]} />
       <directionalLight
         position={keyPos}
-        intensity={2.1}
-        color="#ffedd6"
+        intensity={2.3}
+        color="#ffcf9e"
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-r}
@@ -762,10 +799,11 @@ export default function Scene3D({
         gl.toneMappingExposure = 1.15
       }}
     >
-      <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault />
+      <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat} autoRotateSpeed={0.5} enableDamping />
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={bg} flat={isFlat} />
       <LightRig center={center} radius={radius} />
       <Ground y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />
+      {!isFlat && <DustMotes center={center} radius={radius} />}
       <Suspense fallback={null}>
         <EnvBoundary fallback={<EnvRig />}>
           <Environment files={hdri ?? DEFAULT_HDRI} />
@@ -796,6 +834,14 @@ export default function Scene3D({
             />
           ))}
       <CausalLines points={positions} />
+      {!isFlat && (
+        <EffectComposer multisampling={4}>
+          <Bloom mipmapBlur intensity={0.75} luminanceThreshold={0.72} luminanceSmoothing={0.2} />
+          <HueSaturation saturation={0.14} />
+          <BrightnessContrast contrast={0.11} />
+          <Vignette eskil={false} offset={0.28} darkness={0.62} />
+        </EffectComposer>
+      )}
     </Canvas>
   )
 }

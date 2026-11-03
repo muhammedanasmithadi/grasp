@@ -614,10 +614,10 @@ function LightRig({ center, radius }: { center: THREE.Vector3; radius: number })
   )
   return (
     <>
-      <hemisphereLight args={['#fffaf0', '#9a8f78', 0.55]} />
+      <hemisphereLight args={['#fffaf0', '#9a8f78', 0.4]} />
       <directionalLight
         position={keyPos}
-        intensity={2.3}
+        intensity={1.9}
         color="#ffcf9e"
         castShadow
         shadow-mapSize={[2048, 2048]}
@@ -681,7 +681,7 @@ function Ground({
   return (
     <mesh rotation-x={-Math.PI / 2} position={[cx, y, cz]} receiveShadow>
       <planeGeometry args={[s, s]} />
-      <meshStandardMaterial map={getGroundTexture()} roughness={0.95} metalness={0} />
+      <meshStandardMaterial map={getGroundTexture()} roughness={0.95} metalness={0} envMapIntensity={0.35} />
     </mesh>
   )
 }
@@ -869,7 +869,7 @@ export default function Scene3D({
       gl={{ antialias: true }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 1.0
+        gl.toneMappingExposure = 0.9
       }}
     >
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat} autoRotateSpeed={0.5} enableDamping />

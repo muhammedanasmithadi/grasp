@@ -192,13 +192,16 @@ export interface AppState {
   mutatedBecauseOf: Record<string, string[]>;
   hiddenNodeIds: string[];
   repairStatus: 'idle' | 'correct' | 'wrong';
+  stage: 'research' | 'build' | null;
 }
 
 export type AppAction =
   | { type: 'SET_QUERY'; payload: string }
   | { type: 'ASK_START' }
+  | { type: 'SET_STAGE'; payload: 'research' | 'build' | null }
   | { type: 'ASK_SUCCESS'; payload: SceneData }
   | { type: 'ASK_FAILURE'; payload: string }
+  | { type: 'DISMISS_ERROR' }
   | { type: 'NEXT_BEAT' }
   | { type: 'SET_BEAT'; payload: number }
   | { type: 'FINISH' }

@@ -22,6 +22,7 @@ const initialState: AppState = {
   mutatedBecauseOf: {},
   hiddenNodeIds: [],
   repairStatus: 'idle',
+  stage: null,
 }
 
 function reducer(state: AppState, action: AppAction): AppState {
@@ -29,11 +30,14 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'SET_QUERY':
       return { ...state, query: action.payload }
     case 'ASK_START':
-      return { ...state, loading: true, apiError: null }
+      return { ...state, loading: true, apiError: null, stage: 'research' as const }
+    case 'SET_STAGE':
+      return { ...state, stage: action.payload }
     case 'ASK_SUCCESS':
       return {
         ...state,
         loading: false,
+        stage: null,
         concept: {
           title: action.payload.title,
           id: Date.now().toString(),
@@ -54,9 +58,12 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         loading: false,
+        stage: null,
         apiError: action.payload,
         screen: 'ask',
       }
+    case 'DISMISS_ERROR':
+      return { ...state, apiError: null }
     case 'NEXT_BEAT':
       return { ...state, currentBeat: Math.min(state.currentBeat + 1, state.sceneData?.beats?.length ?? state.currentBeat + 1) }
     case 'SET_BEAT':
@@ -106,6 +113,24 @@ function reducer(state: AppState, action: AppAction): AppState {
   }
 }
 
+function BeatQuiz({ prompt, answer }: { prompt: string; answer: string }) {
+  const [open, setOpen] = useState(false)
+  if (!prompt) return null
+  return (
+    <div className="mt-6 border-t-2 border-c9ba9e pt-4">
+      <div className="text-[11px] font-bold text-slate uppercase tracking-widest mb-2">Check yourself</div>
+      <div className="text-sm font-bold text-2c2418 mb-3">{prompt}</div>
+      {!open ? (
+        <button className="btn-text" onClick={() => setOpen(true)}>
+          Reveal the driver
+        </button>
+      ) : (
+        <div className="text-sm font-bold text-deepGreen uppercase tracking-wider">{answer}</div>
+      )}
+    </div>
+  )
+}
+
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [railTab, setRailTab] = useState<'spine' | 'read' | 'repair'>('spine')
@@ -120,6 +145,7 @@ export default function App() {
     showMastery,
     masteryDelta,
     loading,
+    stage,
     apiError,
     mutation,
     mutatedBecauseOf,
@@ -193,7 +219,11 @@ export default function App() {
     dispatch({ type: 'ASK_START' })
 
     try {
-      const data = await Effect.runPromise(metaModelAPI.generateScene(query.trim()))
+      const data = await Effect.runPromise(
+        metaModelAPI.generateScene(query.trim(), (s) =>
+          dispatch({ type: 'SET_STAGE', payload: s })
+        )
+      )
       dispatch({ type: 'ASK_SUCCESS', payload: data })
     } catch (err) {
       console.error('[Grasp] API failed:', (err as Error).message)
@@ -236,7 +266,7 @@ export default function App() {
                   <div className="flex items-center justify-between mb-3">
                     <label className="block text-[10px] font-bold text-slate tracking-widest">Query</label>
                     {loading ? (
-                      <div className="text-[10px] font-bold text-b8860b animate-pulse">Generating…</div>
+                      <div className="text-[10px] font-bold text-b8860b animate-pulse">{stage === 'research' ? 'Researching mechanism…' : 'Building world…'}</div>
                     ) : (
                       <div className="text-[10px] font-bold text-slate">Type · Enter</div>
                     )}
@@ -261,20 +291,32 @@ export default function App() {
                       className="px-5 border-2 border-b8860b bg-b8860b text-xs font-bold text-white uppercase tracking-widest hover:bg-2c2418 hover:border-2c2418 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={loading || !query.trim()}
                     >
-                      {loading ? 'Generating…' : 'Go'}
+                      {loading ? (stage === 'research' ? 'Researching…' : 'Building…') : 'Go'}
                     </button>
                   </div>
                 </form>
                 {apiError && (
                   <div className="mt-3 p-3 border-2 border-a04000 bg-fdeee2 text-[10px] font-bold text-a04000 rounded w-full flex items-center gap-3">
-                    <span className="flex-1">API unavailable — {apiError}</span>
-                    <button
-                      className="shrink-0 px-4 py-2 border-2 border-a04000 bg-white text-a04000 uppercase tracking-widest hover:bg-a04000 hover:text-white transition-all disabled:opacity-50"
-                      onClick={handleAsk}
-                      disabled={loading || !query.trim()}
-                    >
-                      Try again
-                    </button>
+                    <span className="flex-1">API unavailable — {apiError}{/E_MEDIUM_MISMATCH|E_HERO_DULL|E_TRUNCATED/.test(apiError) ? ' Try rephrasing with moving 3D parts.' : ''}</span>
+                    {/E_MEDIUM_MISMATCH|E_HERO_DULL|E_TRUNCATED/.test(apiError) ? (
+                      <button
+                        className="shrink-0 px-4 py-2 border-2 border-a04000 bg-white text-a04000 uppercase tracking-widest hover:bg-a04000 hover:text-white transition-all"
+                        onClick={() => {
+                          dispatch({ type: 'DISMISS_ERROR' })
+                          document.querySelector('textarea')?.focus()
+                        }}
+                      >
+                        Edit query
+                      </button>
+                    ) : (
+                      <button
+                        className="shrink-0 px-4 py-2 border-2 border-a04000 bg-white text-a04000 uppercase tracking-widest hover:bg-a04000 hover:text-white transition-all disabled:opacity-50"
+                        onClick={handleAsk}
+                        disabled={loading || !query.trim()}
+                      >
+                        Try again
+                      </button>
+                    )}
                   </div>
                 )}
                 <p className="text-sm text-slate leading-relaxed mt-4 italic text-center">Any mechanism, any concept. Agents reconstruct the causal chain; you learn by repairing what they break.</p>
@@ -329,7 +371,7 @@ export default function App() {
             )}
           </main>
           {screen === 'scene' && (
-            <aside className="w-[26rem] shrink-0 border-l-2 border-c9ba9e bg-f3efe1 flex flex-col z-20 min-h-0">
+            <aside className="w-80 shrink-0 border-l-2 border-c9ba9e bg-f3efe1 flex flex-col z-20 min-h-0">
               <div className="shrink-0 flex border-b-2 border-c9ba9e" role="tablist" aria-label="Detail panels">
                 {(['spine', 'read', 'repair'] as const).map((tab) => (
                   <button
@@ -360,15 +402,17 @@ export default function App() {
                       const isActive = i + 1 === currentBeat
                       const isSab = sabotageMode && currentBeat === sabotageBeatIndex && i === sabotageBeatIndex - 1
                       return (
-                        <div
+                        <button
                           key={i}
-                          className={`spine-node ${isActive ? 'active' : ''} ${isSab ? 'sabotage' : ''} flex items-center gap-3 p-4 craft-panel ${isSab ? 'border-a04000 bg-fdeee2' : ''}`}
+                          onClick={() => dispatch({ type: 'SET_BEAT', payload: i + 1 })}
+                          className={`spine-node ${isActive ? 'active' : ''} ${isSab ? 'sabotage' : ''} flex items-center gap-2 p-3 craft-panel w-full text-left cursor-pointer hover:border-b8860b transition-all ${isSab ? 'border-a04000 bg-fdeee2' : ''}`}
+                          aria-label={`Go to beat ${i + 1}: ${link.part}`}
                         >
-                          <span className={`w-3 h-3 ${isSab ? 'bg-a04000' : 'bg-b8860b'}`}></span>
-                          <span className={`text-sm font-bold ${isSab ? 'text-a04000' : 'text-2c2418'}`}>{link.part}</span>
+                          <span className={`w-3 h-3 shrink-0 ${isSab ? 'bg-a04000' : 'bg-b8860b'}`}></span>
+                          <span className={`text-[13px] font-bold ${isSab ? 'text-a04000' : 'text-2c2418'}`}>{link.part}</span>
                           <span className={`ml-auto text-[11px] font-bold ${isSab ? 'text-a04000' : isActive ? 'text-b8860b' : 'text-e69f00'}`}>{link.action}</span>
                           {isSab && <span className="text-[10px] font-black text-a04000">Fault</span>}
-                        </div>
+                        </button>
                       )
                     })}
                   </div>
@@ -381,6 +425,11 @@ export default function App() {
                     <span className="drop-cap">{beat?.narration?.[0]}</span>{beat?.narration?.slice(1) || ''}
                   </div>
                   <div className="mt-4 marginalia">{isSabotage ? `Note: The ${beat?.part} beat has a causal fault. Locate the driver.` : 'Follow the causal chain through each beat.'}</div>
+                  <BeatQuiz
+                    key={currentBeat}
+                    prompt={dslBeats?.[currentBeat - 1]?.probe.prompt ?? ''}
+                    answer={dslNodes.find((n) => n.id === dslBeats?.[currentBeat - 1]?.probe.answer)?.label ?? dslBeats?.[currentBeat - 1]?.probe.answer ?? ''}
+                  />
                 </div>
               )}
               {railTab === 'repair' && (

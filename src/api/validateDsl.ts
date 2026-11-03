@@ -177,8 +177,7 @@ export const validateSceneDsl = (
       return yield* fail("E_GROUP_TYPE: groups must be an array");
     }
     const grouped = new Set<string>();
-    const groupIds = new Set<string>();
-    for (const g of (Array.isArray(d.groups) ? d.groups : []) as Record<string, unknown>[]) {
+    const groupIds = new Set<string>();    for (const g of (Array.isArray(d.groups) ? d.groups : []) as Record<string, unknown>[]) {
       if (typeof g.id !== "string" || !g.id) {
         return yield* fail("E_GROUP_ID: every group needs a string id");
       }
@@ -207,6 +206,14 @@ export const validateSceneDsl = (
         }
         grouped.add(m);
       }
+    }
+
+    // Busy worlds must compose: more than 6 nodes with zero groups
+    // means single primitives everywhere, which always reads crude.
+    if ((d.nodes as unknown[]).length > 6 && groupIds.size === 0) {
+      return yield* fail(
+        "E_GROUP_REQUIRED: worlds with more than 6 nodes must compose at least one group"
+      );
     }
 
     for (const j of d.joints as Record<string, unknown>[]) {

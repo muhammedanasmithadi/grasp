@@ -1112,7 +1112,22 @@ export default function Scene3D({
   // lone 3-unit lever at min distance fills the frame and reads as an
   // accident, not a close-up.
   const focus = useMemo(() => {
-    const mateIds = new Set(focusNodeIds)
+    // Seed from the primary assembly only: the first group containing a
+    // beat node, plus any ungrouped beat nodes. Seeding from every
+    // becauseOf id at once reverted dense rows to establishing shots on
+    // every beat and the close-ups never happened.
+    const seedIds = new Set<string>()
+    const primary = groups.find((g) => g.members.some((m) => focusNodeIds.includes(m)))
+    if (primary) {
+      for (const m of primary.members) seedIds.add(m)
+    }
+    for (const id of focusNodeIds) {
+      if (!memberToGroup.has(id)) seedIds.add(id)
+    }
+    if (seedIds.size === 0) {
+      for (const id of focusNodeIds) seedIds.add(id)
+    }
+    const mateIds = new Set(seedIds)
     for (const g of groups) {
       if (g.members.some((m) => mateIds.has(m))) {
         for (const m of g.members) mateIds.add(m)

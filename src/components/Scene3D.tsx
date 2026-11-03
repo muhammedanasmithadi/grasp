@@ -706,7 +706,7 @@ function FocusRig({
   useEffect(() => {
     if (flat || !controls) return
     const dir = new THREE.Vector3(1, 0.62, 1.25).normalize()
-    const dist = Math.max(radius * 3.2, 5)
+    const dist = Math.max(radius * 3.2, 6)
     controls.target.copy(target)
     camera.position.copy(target).addScaledVector(dir, dist)
     const persp = camera as THREE.PerspectiveCamera
@@ -1066,7 +1066,7 @@ export default function Scene3D({
       const n = visibleNodes.find((v) => v.id === id)
       if (n) member = Math.max(member, estimateExtents(n).hx)
     }
-    return { target: c, radius: Math.min(Math.max(r, member * 1.9), radius) }
+    return { target: c, radius: Math.min(Math.max(r, member * 2.2), radius) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(focusNodeIds), center, radius])
 

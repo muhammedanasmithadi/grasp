@@ -134,6 +134,25 @@ const run = Effect.gen(function* () {
   const rel = tubePointsRelative([[0,3,0],[4,4,1]] as never, [0,3,0] as never);
   check("tube-relative", rel[0][0] === 0 && rel[0][1] === 0 && rel[1][0] === 4 && rel[1][1] === 1, JSON.stringify(rel));
 
+  // 11. Beat-referenced tubes join the row (seated subjects), while
+  // unreferenced tubes pin as atmosphere.
+  const TUBEROW = `
+concept({"question":"t","medium":"3d","mediumWhy":"x","verification":"sketch"})
+theme({"motif":"m","palette":"okabe-ito","keyAzimuth":135})
+box({"id":"a","parent":null,"transform":{"p":[30,9,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#E69F00"},"label":"block a","geometry":{"args":[1,1,1]}})
+tube({"id":"hose","parent":null,"transform":{"p":[0,4,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.2,"tint":"#0072B2"},"label":"feed hose","geometry":{"path":[[0,4,0],[3,4,0]],"radius":0.15}})
+box({"id":"b","parent":null,"transform":{"p":[-20,6,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#009E73"},"label":"block b","geometry":{"args":[1,1,1]}})
+beat({"id":"s1","t":[0,6],"goal":"g1","becauseOf":["hose"],"probe":{"kind":"trace","prompt":"p","answer":"hose"},"narration":"n"})
+beat({"id":"s2","t":[6,12],"goal":"g2","becauseOf":["a"],"probe":{"kind":"trace","prompt":"p","answer":"a"},"narration":"n"})
+beat({"id":"s3","t":[12,18],"goal":"g3","becauseOf":["b"],"probe":{"kind":"trace","prompt":"p","answer":"b"},"narration":"n"})
+camera({"axisOfAction":[0,1,0],"shots":[]})
+`;
+  const tubeLaid = adaptDslToScene((yield* parseSceneCode(TUBEROW)) as SceneDsl).dsl!;
+  const hose = tubeLaid.nodes.find((n) => n.id === "hose")!;
+  check("row-tube-seated", hose.transform.p[1] < 1.0, `y=${hose.transform.p[1].toFixed(2)}`);
+  const hosePath = (hose.geometry!.path as number[][])[0];
+  check("row-tube-path-follows", hosePath[1] < 3.0, `pathY=${hosePath[1].toFixed(2)}`);
+
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");
 });

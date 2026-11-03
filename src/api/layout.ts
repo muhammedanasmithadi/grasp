@@ -179,7 +179,13 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   // Effects (hoses-as-atmosphere, particle swarms, beams) do not take
   // row slots: one sprawling path must never size the street. They pin
   // to the row middle after placement, paths translated and clamped.
-  const isEffect = (n: DslNode): boolean => n.type === "tube" || n.type === "points";
+  // Exception: a tube a beat spotlights IS the subject (wick, straw,
+  // arm pipe), not atmosphere. Referenced tubes join the row, seated
+  // with the rest, their paths already clamped.
+  const referencedByBeats = new Set<string>();
+  for (const b of dsl.beats) for (const ref of b.becauseOf ?? []) referencedByBeats.add(ref);
+  const isEffect = (n: DslNode): boolean =>
+    n.type === "points" || (n.type === "tube" && !referencedByBeats.has(n.id));
   const row = ordered.filter((n) => !isEffect(n));
   const effects = ordered.filter(isEffect);
   const ext = new Map<string, Extents>();
@@ -195,13 +201,23 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   // preserved. A tall thin mast counts by height, not just girth.
   // Models keep authorial scale but are capped, never grown: a hero
   // scan must not dwarf the row it belongs to.
-  // Tubes, particles, and backdrops keep their own sizing.
+  // Tubes keep authorial scale (rescaling s would warp world-unit
+  // paths) but cap the slot they reserve so one hose never sizes
+  // the street. Particles and backdrops keep their own sizing.
   for (const n of row) {
     if (
-      n.type === "tube" || n.type === "points" ||
+      n.type === "points" ||
       n.type === "plane" || n.type === "circle" || n.type === "ring"
     ) continue;
     const e = ext.get(n.id)!;
+    if (n.type === "tube") {
+      ext.set(n.id, {
+        hx: Math.min(e.hx, 2.5),
+        hy: Math.min(e.hy, 2.5),
+        hz: Math.min(e.hz, 2.5),
+      });
+      continue;
+    }
     const biggest = Math.max(e.hx, e.hy, e.hz);
     const clamped = n.type === "model"
       ? Math.min(biggest, 1.6)

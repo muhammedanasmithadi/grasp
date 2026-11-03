@@ -732,7 +732,7 @@ function FocusRig({
     // front-side, never down its length: a diagonal view foreshortens
     // the street and drags edge-neighbors into the frame.
     const dir = new THREE.Vector3(0.35, 0.6, 1).normalize()
-    const dist = Math.max(radius * 3.6, 6.5)
+    const dist = Math.max(radius * 3.2, 6)
     controls.target.copy(target)
     camera.position.copy(target).addScaledVector(dir, dist)
     const persp = camera as THREE.PerspectiveCamera
@@ -1120,12 +1120,14 @@ export default function Scene3D({
     }
     // Immediate row-neighbors count too: a beat reads against the parts
     // it touches, and a close-up that crops the touching neighbor reads
-    // as a mistake. Nodes within one organ-gap of any focus node join.
+    // as a mistake. The window stays tight (±1.2, about one organ gap):
+    // wider windows silently reverted every beat to a wide establishing
+    // shot and killed the close-ups entirely.
     const byX = [...visibleNodes].sort((a, b) => a.transform.p[0] - b.transform.p[0])
     const focusX = byX.filter((n) => mateIds.has(n.id)).map((n) => n.transform.p[0])
     if (focusX.length > 0) {
-      const lo = Math.min(...focusX) - 3.5
-      const hi = Math.max(...focusX) + 3.5
+      const lo = Math.min(...focusX) - 1.2
+      const hi = Math.max(...focusX) + 1.2
       for (const n of byX) {
         if (n.transform.p[0] >= lo && n.transform.p[0] <= hi) mateIds.add(n.id)
       }

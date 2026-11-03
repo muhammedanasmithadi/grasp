@@ -459,7 +459,7 @@ function DslNodeMesh({
   })()
   const base = isFault
     ? '#D55E00'
-    : groundSafeTint(node.material.tint || color, bigBright)
+    : liftBlackTint(groundSafeTint(node.material.tint || color, bigBright))
   const autoMap = node.material.map ?? substanceTexture(node)
   const mapTex = autoMap ? getMapTexture(autoMap) : undefined
   // Normal detail rides along: polyhaven albedo URLs have a matching
@@ -821,6 +821,21 @@ function groundSafeTint(tint: string, isGround: boolean): string {
     Math.round((c * 0.35 + t * 0.65) * 255)
   const toHex = (v: number): string => v.toString(16).padStart(2, '0')
   return `#${toHex(mix(r, 0.72))}${toHex(mix(g, 0.67))}${toHex(mix(b, 0.55))}`
+}
+
+/** Near-black parts read as holes in a warm diorama. Lift them toward
+ * warm charcoal. Pure black is never prompt-legal outside space scenes,
+ * so this only ever repairs model overreach, never authorial intent. */
+export function liftBlackTint(tint: string): string {
+  const hex = expandHex(tint)
+  if (!hex) return tint
+  const lum =
+    (0.299 * parseInt(hex.slice(1, 3), 16) +
+      0.587 * parseInt(hex.slice(3, 5), 16) +
+      0.114 * parseInt(hex.slice(5, 7), 16)) /
+    255
+  if (lum >= 0.12) return tint
+  return '#4a4238'
 }
 
 /** Museum plinth: the row stands on a low rounded platform, which

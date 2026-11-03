@@ -1146,6 +1146,11 @@ export default function Scene3D({
     const c = pts
       .reduce((acc, p) => acc.add(p.clone()), new THREE.Vector3())
       .multiplyScalar(1 / pts.length)
+    // Lean toward the beat's own node: two beats sharing one assembly
+    // otherwise frame identically. The assembly stays in frame; the
+    // emphasis moves with the lesson.
+    const first = nodePositions.get(focusNodeIds[0])
+    if (first) c.lerp(first, 0.45)
     let r = 1.2
     for (const p of pts) r = Math.max(r, c.distanceTo(p) + 1.2)
     // Swept-volume margin: joints animate parts ±0.45 and detail

@@ -139,7 +139,8 @@ const run = Effect.gen(function* () {
   const TUBEROW = `
 concept({"question":"t","medium":"3d","mediumWhy":"x","verification":"sketch"})
 theme({"motif":"m","palette":"okabe-ito","keyAzimuth":135})
-box({"id":"a","parent":null,"transform":{"p":[30,9,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#E69F00"},"label":"block a","geometry":{"args":[1,1,1]}})
+box({"id":"a","parent":null,"transform":{"p":[30,9,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#E69F00"},"label":"block a","geometry":{"args":[1.2,1,1]}})
+hinge({"id":"j1","a":"a","b":"b","anchor":[0,0,0],"axis":[0,0,1],"range":[0,90],"driver":{"kind":"time","rpm":20}})
 tube({"id":"hose","parent":null,"transform":{"p":[0,4,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.2,"tint":"#0072B2"},"label":"feed hose","geometry":{"path":[[0,4,0],[3,4,0]],"radius":0.15}})
 box({"id":"b","parent":null,"transform":{"p":[-20,6,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#009E73"},"label":"block b","geometry":{"args":[1,1,1]}})
 beat({"id":"s1","t":[0,6],"goal":"g1","becauseOf":["hose"],"probe":{"kind":"trace","prompt":"p","answer":"hose"},"narration":"n"})

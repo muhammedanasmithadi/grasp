@@ -178,10 +178,16 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
     const dz = 0 - old[2];
     let geometry = n.geometry;
     if (n.type === "tube" && Array.isArray(n.geometry?.path)) {
+      // Translate with the node, but clamp reach: one sprawling hose
+      // must never own the frame or the ground. Shape is preserved,
+      // sprawl is not.
+      const MAX_REACH = 5;
+      const clamp = (v: number, c: number): number =>
+        c + Math.max(-MAX_REACH, Math.min(MAX_REACH, v - c));
       geometry = {
         ...n.geometry,
         path: (n.geometry.path as [number, number, number][]).map(
-          ([x, y, z]) => [x + dx, y + dy, z + dz] as Vec3
+          ([x, y, z]) => [clamp(x + dx, nx), clamp(y + dy, ny), clamp(z + dz, 0)] as Vec3
         ),
       };
     }

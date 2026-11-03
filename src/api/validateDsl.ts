@@ -268,7 +268,23 @@ export const validateSceneDsl = (
         "E_BEAT_COUNT: a teaching world needs at least 3 beats"
       );
     }
-    for (const b of d.beats as Record<string, unknown>[]) {
+    // Spine clarity: every beat must spotlight a different part. The UI
+  // maps each beat to the label of its first becauseOf node, so the
+  // labels themselves must be distinct (case-insensitive).
+  const seenParts = new Set<string>();
+  for (const b of d.beats as Record<string, unknown>[]) {
+    const refs = b.becauseOf as unknown;
+    const first = Array.isArray(refs) ? refs[0] : undefined;
+    const node = (d.nodes as Record<string, unknown>[]).find((n) => n.id === first);
+    const label = typeof node?.label === "string" ? node.label.toLowerCase() : String(first ?? "");
+    if (seenParts.has(label)) {
+      return yield* fail(
+        `E_SPINE_DUP: beat "${b.id}" repeats part "${node?.label ?? first}"; every beat must spotlight a different part`
+      );
+    }
+    seenParts.add(label);
+  }
+  for (const b of d.beats as Record<string, unknown>[]) {
       if (typeof b.id !== "string" || !b.id) {
         return yield* fail("E_BEAT_ID: every beat needs a string id");
       }      const refs = b.becauseOf as unknown;

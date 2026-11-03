@@ -208,6 +208,7 @@ export class MetaModelAPI {
       e.message.includes("E_MEDIUM_MISMATCH") ||
       e.message.includes("E_HERO_DULL") ||
       e.message.includes("E_BEAT_COUNT") ||
+      e.message.includes("E_SPINE_DUP") ||
       e.message.includes("E_GROUP_REQUIRED") ||
       e.message.includes("E_GROUND_PLANE") ||
       e.message.includes("E_GROUND_SLAB");

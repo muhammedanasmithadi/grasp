@@ -17,6 +17,8 @@ cylinder({"id":"shaft","parent":null,"transform":{"p":[-30,8,20],"r":[0,0,1.5708
 torus({"id":"bow","parent":null,"transform":{"p":[40,30,-15],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.35,"metalness":0.9,"tint":"#C9A227"},"label":"key bow","geometry":{"args":[0.5,0.18]}})
 box({"id":"pin1","parent":null,"transform":{"p":[-45,-25,30],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.8,"tint":"#D55E00"},"label":"pin one","geometry":{"args":[0.2,0.6,0.2]}})
 box({"id":"pin2","parent":null,"transform":{"p":[50,40,25],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.8,"tint":"#D55E00"},"label":"pin two","geometry":{"args":[0.2,0.8,0.2]}})
+box({"id":"housing","parent":null,"transform":{"p":[-15,-30,-20],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.6,"metalness":0.3,"tint":"#8a8272"},"label":"lock housing","geometry":{"args":[8,8,8]}})
+capsule({"id":"spring","parent":null,"transform":{"p":[60,-40,30],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.8,"tint":"#E69F00"},"label":"tiny spring","geometry":{"args":[0.05,0.1]}})
 tube({"id":"beam","parent":null,"transform":{"p":[0,3,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.2,"tint":"#E69F00","emissive":"#E69F00"},"label":"light beam","geometry":{"path":[[0,3,0],[40,30,10],[120,90,40]],"radius":0.08}})
 group({"id":"grp-door","label":"door assembly","members":["door","bolt"]})
 group({"id":"grp-key","label":"key assembly","members":["shaft","bow"]})
@@ -25,6 +27,7 @@ hinge({"id":"j1","a":"shaft","b":"plug","anchor":[0,0,0],"axis":[0,0,1],"range":
 beat({"id":"s1","t":[0,6],"goal":"key enters the plug","becauseOf":["shaft"],"probe":{"kind":"trace","prompt":"what enters the plug?","answer":"shaft"},"narration":"The key slides home."})
 beat({"id":"s2","t":[6,12],"goal":"plug turns with key","becauseOf":["plug"],"probe":{"kind":"trace","prompt":"what turns?","answer":"plug"},"narration":"The plug rotates."})
 beat({"id":"s3","t":[12,18],"goal":"bolt retracts","becauseOf":["bolt"],"probe":{"kind":"trace","prompt":"what retracts?","answer":"bolt"},"narration":"The bolt pulls back."})
+beat({"id":"s4","t":[18,24],"goal":"housing holds all","becauseOf":["housing"],"probe":{"kind":"trace","prompt":"what holds all?","answer":"housing"},"narration":"The housing holds all."})
 camera({"axisOfAction":[0,1,0],"shots":[{"t":0,"size":"wide","target":"door","move":"orbit-in"}]})
 `;
 
@@ -44,13 +47,22 @@ const run = Effect.gen(function* () {
   const xs = laid.nodes.map((n) => Math.abs(n.transform.p[0]));
   const minY = Math.min(...laid.nodes.filter((n) => n.type !== "tube").map((n) => n.transform.p[1]));
   check("validates", true);
-  check("compact-row", Math.max(...xs) < 8, `max|x|=${Math.max(...xs).toFixed(2)}`);
+  check("compact-row", Math.max(...xs) < 12, `max|x|=${Math.max(...xs).toFixed(2)}`);
   check("seated", minY >= 0, `minY=${minY.toFixed(2)}`);
   check("groups-kept", laid.groups.length === 3, `${laid.groups.length} groups`);
+  // Uniform presence: solid primitives sized into [0.4, 2.2] half-extent.
+  const housing = laid.nodes.find((n) => n.id === "housing")!;
+  const spring = laid.nodes.find((n) => n.id === "spring")!;
+  check("giant-shrunk", Math.abs(housing.transform.s[0] - 2.2 / 4) < 0.01, `s=${housing.transform.s[0].toFixed(3)}`);
+  check("speck-grown", Math.abs(spring.transform.s[0] - 0.4 / 0.05) < 0.01, `s=${spring.transform.s[0].toFixed(2)}`);
+  // Stability: laying out twice changes nothing (steady frame).
+  const twice = adaptDslToScene(laid).dsl!;
+  const same = JSON.stringify(twice.nodes.map((n) => n.transform)) === JSON.stringify(laid.nodes.map((n) => n.transform));
+  check("layout-stable", same);
   const tube = laid.nodes.find((n) => n.id === "beam")!;
   const reach = Math.max(...(tube.geometry!.path as number[][]).map((p) => Math.abs(p[0] - tube.transform.p[0])));
   check("tube-clamped", reach <= 5.01, `reach=${reach.toFixed(2)}`);
-  check("beats-mapped", scene.beats.length === 3 && scene.causalSpine.length === 3);
+  check("beats-mapped", scene.beats.length === 4 && scene.causalSpine.length === 4);
 
   // 2. Duplicate spine labels rejected.
   const dup = yield* Effect.flip(parseSceneCode(DUP_SPINE));

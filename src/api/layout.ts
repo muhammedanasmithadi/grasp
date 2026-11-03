@@ -138,7 +138,10 @@ function causalOrder(dsl: SceneDsl): DslNode[] {
  * their node. Returns a new SceneDsl; the input is untouched.
  */
 export function layoutScene(dsl: SceneDsl): SceneDsl {
-  const ordered = causalOrder(dsl).filter((n) => !isBackdropNode(n));
+  // Copy: placement never mutates the validated input.
+  const ordered = causalOrder(dsl)
+    .filter((n) => !isBackdropNode(n))
+    .map((n) => ({ ...n, transform: { ...n.transform, p: [...n.transform.p] as Vec3, r: [...n.transform.r] as Vec3, s: [...n.transform.s] as Vec3 } }));
   if (ordered.length === 0) return dsl;
   // Effects (hoses-as-atmosphere, particle swarms, beams) do not take
   // row slots: one sprawling path must never size the street. They pin
@@ -149,11 +152,27 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   const ext = new Map<string, { hx: number; hy: number }>();
   for (const n of row) {
     const e = estimateExtents(n);
-    ext.set(n.id, { hx: Math.min(Math.max(e.hx, 0.3), 6), hy: Math.min(Math.max(e.hy, 0.3), 6) });
+    ext.set(n.id, { hx: Math.min(Math.max(e.hx, 0.01), 8), hy: Math.min(Math.max(e.hy, 0.01), 8) });
   }
   // Cursor pass: gap 0.15 inside a group (touching), 0.7 between organs.
   const groupOf = new Map<string, string>();
   for (const g of dsl.groups ?? []) for (const m of g.members) groupOf.set(m, g.id);
+  // No giants, no specks: uniform presence for solid primitives.
+  // Rescale s so hx lands in [0.4, 2.2]; proportions preserved.
+  // Tubes, particles, models, and backdrops keep their own sizing.
+  for (const n of row) {
+    if (
+      n.type === "tube" || n.type === "points" || n.type === "model" ||
+      n.type === "plane" || n.type === "circle" || n.type === "ring"
+    ) continue;
+    const e = ext.get(n.id)!;
+    const clamped = Math.min(Math.max(e.hx, 0.4), 2.2);
+    const k = clamped / e.hx;
+    if (Math.abs(k - 1) < 0.01) continue;
+    const s = n.transform.s;
+    n.transform = { ...n.transform, s: [s[0] * k, s[1] * k, s[2] * k] as Vec3 };
+    ext.set(n.id, { hx: clamped, hy: e.hy * k });
+  }
   let cursor = 0;
   const xs = new Map<string, number>();
   row.forEach((n, i) => {
@@ -166,7 +185,9 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   });
   const total = cursor;
   const shiftX = total / 2;
+  const placed = new Map(ordered.map((n) => [n.id, n]));
   const nodes = dsl.nodes.map((n) => {
+    const src = placed.get(n.id) ?? n;
     const effIdx = effects.findIndex((e) => e.id === n.id);
     if (effIdx >= 0) {
       // Pin effects near the middle, slightly stacked, paths clamped.
@@ -227,7 +248,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
     }
     return {
       ...n,
-      transform: { ...n.transform, p: [nx, ny, 0] as Vec3 },
+      transform: { ...src.transform, p: [nx, ny, 0] as Vec3 },
       geometry,
     };
   });

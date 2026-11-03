@@ -135,6 +135,75 @@ function BeatQuiz({ prompt, answer }: { prompt: string; answer: string }) {
   )
 }
 
+/** Guided fault drill: 4 focused choices (answer + 3 distractors),
+ * not a dump of every node. Distractors prefer other spotlighted parts. */
+function DrillPanel({
+  dslNodes,
+  probeAnswer,
+  prompt,
+  kind,
+  mutationId,
+  repairStatus,
+  onPick,
+  onRestore,
+}: {
+  dslNodes: { id: string; label: string }[]
+  probeAnswer: string
+  prompt: string
+  kind: string
+  mutationId: string
+  repairStatus: 'idle' | 'correct' | 'wrong'
+  onPick: (nodeId: string) => void
+  onRestore: () => void
+}) {
+  const options = useMemo(() => {
+    const answer = dslNodes.find((n) => n.id === probeAnswer)
+    const rest = dslNodes.filter((n) => n.id !== probeAnswer)
+    // Deterministic order: answer first, then others; rotate by answer
+    // length so the correct choice is not always on top.
+    const ordered = answer ? [answer, ...rest.slice(0, 3)] : rest.slice(0, 4)
+    const shift = probeAnswer.length % Math.max(ordered.length, 1)
+    return [...ordered.slice(shift), ...ordered.slice(0, shift)]
+  }, [dslNodes, probeAnswer])
+  const [picked, setPicked] = useState<string | null>(null)
+  return (
+    <div className="craft-panel p-6 border-a04000 bg-fdeee2">
+      <div className="text-[10px] font-bold text-a04000 uppercase tracking-widest mb-2">
+        {mutationId} · {kind.replace('_', ' ')} · step 1 of 2: find it
+      </div>
+      <div className="text-lg font-bold text-2c2418 mb-1">Something is missing from the scene.</div>
+      <div className="text-sm text-2c2418 mb-4">{prompt}</div>
+      <div className="space-y-2">
+        {options.map((n) => {
+          const isRight = repairStatus === 'correct' && n.id === probeAnswer
+          const isWrongPick = repairStatus === 'wrong' && picked === n.id
+          return (
+            <button
+              key={n.id}
+              className={`w-full text-left px-4 py-3 border-2 bg-white text-[11px] font-bold uppercase tracking-widest transition-all ${isRight ? 'border-009e73 text-009e73' : isWrongPick ? 'border-a04000 text-a04000' : 'border-c9ba9e text-2c2418 hover:border-b8860b'}`}
+              onClick={() => { setPicked(n.id); onPick(n.id) }}
+            >
+              {isRight ? '✓ ' : ''}{n.label}
+            </button>
+          )
+        })}
+      </div>
+      {repairStatus === 'correct' && (
+        <div className="mt-4">
+          <div className="text-[11px] font-bold text-deepGreen uppercase tracking-widest mb-1">Fault located — step 2 of 2</div>
+          <div className="text-sm text-2c2418 mb-3">You found the missing driver. Restore the correct scene to lock in +10%.</div>
+          <button className="btn-text w-full" onClick={onRestore}>
+            Restore correct scene
+          </button>
+        </div>
+      )}
+      {repairStatus === 'wrong' && (
+        <div className="mt-4 text-[11px] font-bold text-a04000 uppercase tracking-widest">Not that part — look for the hole in the chain, try again</div>
+      )}
+    </div>
+  )
+}
+
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [railTab, setRailTab] = useState<'spine' | 'read' | 'repair'>('spine')
@@ -465,34 +534,16 @@ export default function App() {
                       <span className="w-3 h-3 bg-a04000"></span> Introduce fault
                     </button>
                   ) : mutation ? (
-                    <div className="craft-panel p-6 border-a04000 bg-fdeee2">
-                      <div className="text-[10px] font-bold text-a04000 uppercase tracking-widest mb-2">
-                        {mutation.mutationId} · {mutation.kind.replace('_', ' ')}
-                      </div>
-                      <div className="text-lg font-bold text-2c2418 mb-4">{mutation.probe.prompt}</div>
-                      <div className="space-y-2">
-                        {dslNodes.map((n) => (
-                          <button
-                            key={n.id}
-                            className="w-full text-left px-4 py-3 border-2 border-c9ba9e bg-white text-[11px] font-bold text-2c2418 uppercase tracking-widest hover:border-b8860b transition-all"
-                            onClick={() => dispatch({ type: 'REPAIR_ATTEMPT', payload: { nodeId: n.id } })}
-                          >
-                            {n.label}
-                          </button>
-                        ))}
-                      </div>
-                      {repairStatus === 'correct' && (
-                        <div className="mt-4">
-                          <div className="text-[11px] font-bold text-deepGreen uppercase tracking-widest mb-3">Fault located — scene repaired</div>
-                          <button className="btn-text w-full" onClick={() => dispatch({ type: 'RESOLVE_FAULT' })}>
-                            Restore correct scene
-                          </button>
-                        </div>
-                      )}
-                      {repairStatus === 'wrong' && (
-                        <div className="mt-4 text-[11px] font-bold text-a04000 uppercase tracking-widest">Not that part — try again</div>
-                      )}
-                    </div>
+                    <DrillPanel
+                      dslNodes={dslNodes}
+                      probeAnswer={mutation.probe.answer}
+                      prompt={mutation.probe.prompt}
+                      kind={mutation.kind}
+                      mutationId={mutation.mutationId}
+                      repairStatus={repairStatus}
+                      onPick={(nodeId) => dispatch({ type: 'REPAIR_ATTEMPT', payload: { nodeId } })}
+                      onRestore={() => dispatch({ type: 'RESOLVE_FAULT' })}
+                    />
                   ) : null}
                 </div>
               )}

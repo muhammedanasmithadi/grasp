@@ -700,7 +700,7 @@ function FocusRig({
   } else if (goal.current.beat !== currentBeat) {
     goal.current.beat = currentBeat
   }
-  goal.current.dist = Math.max(radius * 3.2, 4)
+  goal.current.dist = Math.max(radius * 3.2, 5)
   useFrame(() => {
     if (flat || !controls) return
     controls.target.lerp(target, 0.06)

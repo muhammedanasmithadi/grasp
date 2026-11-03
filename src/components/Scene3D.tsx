@@ -280,12 +280,26 @@ function ModelInner({ src, scale }: { src: string; scale: [number, number, numbe
   return <primitive object={obj} />
 }
 
-function useTubeGeometry(path: [number, number, number][] | undefined, radius: number) {
+/** Tube paths are authored in world coordinates (absolute points the
+ * hose passes through). The mesh lives inside a group already
+ * positioned at the node origin, so feeding absolute points to the
+ * geometry double-counts the transform and every tube renders ~2x away
+ * from its staged slot — the chronic floating-hose read. Relativize. */
+export function tubePointsRelative(
+  path: [number, number, number][] | undefined,
+  origin: [number, number, number]
+): [number, number, number][] {
+  if (!path) return []
+  return path.map(([x, y, z]) => [x - origin[0], y - origin[1], z - origin[2]])
+}
+
+function useTubeGeometry(path: [number, number, number][] | undefined, radius: number, origin: [number, number, number]) {
   return useMemo(() => {
-    if (!path || path.length < 2) return null
-    const pts = path.map((p) => new THREE.Vector3(p[0], p[1], p[2]))
+    const rel = tubePointsRelative(path, origin)
+    if (rel.length < 2) return null
+    const pts = rel.map((p) => new THREE.Vector3(p[0], p[1], p[2]))
     return makeTaperedTube(pts, radius)
-  }, [path ? JSON.stringify(path) : '', radius])
+  }, [path ? JSON.stringify(path) : '', radius, JSON.stringify(origin)])
 }
 
 function PointsCloud({ count, size, color }: { count: number; size: number; color: string }) {
@@ -478,7 +492,8 @@ function faceSizeOf(node: DslNode): number {
   const isTube = node.type === 'tube'
   const tubeGeo = useTubeGeometry(
     node.type === 'tube' ? (node.geometry?.path as [number, number, number][] | undefined) : undefined,
-    node.geometry?.radius ?? 0.15
+    node.geometry?.radius ?? 0.15,
+    node.transform.p
   )
   const isModel = node.type === 'model' && !!node.geometry?.url
   const isPoints = node.type === 'points'

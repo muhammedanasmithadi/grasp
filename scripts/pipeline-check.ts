@@ -7,7 +7,7 @@ import { adaptDslToScene } from "../src/api/parser.ts";
 import { createMutation } from "../src/api/mutations.ts";
 import { DetailFor } from "../src/components/details.tsx";
 import { injectHero } from "../src/api/hero.ts";
-import { substanceTexture, liftBlackTint, brightFaceTint } from "../src/components/Scene3D.tsx";
+import { substanceTexture, liftBlackTint, brightFaceTint, tubePointsRelative } from "../src/components/Scene3D.tsx";
 import type { SceneDsl } from "../src/types.ts";
 
 const GOOD = `
@@ -129,6 +129,10 @@ const run = Effect.gen(function* () {
   check("bright-pulled", brightFaceTint("#ffffff", 6) !== "#ffffff", brightFaceTint("#ffffff", 6));
   check("small-kept", brightFaceTint("#ffffff", 3) === "#ffffff");
   check("gray-kept2", brightFaceTint("#8a8272", 6) === "#8a8272");
+
+  // 10. Tube paths relativize to the node origin (no double transform).
+  const rel = tubePointsRelative([[0,3,0],[4,4,1]] as never, [0,3,0] as never);
+  check("tube-relative", rel[0][0] === 0 && rel[0][1] === 0 && rel[1][0] === 4 && rel[1][1] === 1, JSON.stringify(rel));
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

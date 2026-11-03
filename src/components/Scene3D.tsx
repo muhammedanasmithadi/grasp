@@ -740,6 +740,9 @@ function FocusRig({
     persp.far = dist * 30
     persp.updateProjectionMatrix()
     controls.update()
+    console.info(
+      `[FocusRig] beat ${currentBeat} target=(${target.x.toFixed(1)},${target.y.toFixed(1)},${target.z.toFixed(1)}) focusR=${radius.toFixed(1)} dist=${dist.toFixed(1)}`
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentBeat, sceneKey])
   return null

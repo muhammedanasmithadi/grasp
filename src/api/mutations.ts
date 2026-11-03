@@ -35,6 +35,8 @@ export function createMutation(dsl: SceneDsl, seedStr?: string): Mutation | null
     const original = b.becauseOf[0];
     const wrong = otherNodeId(dsl, b.becauseOf, seed + b.id.length);
     if (!wrong) continue;
+    const labelOf = (id: string): string =>
+      dsl.nodes.find((n) => n.id === id)?.label ?? id;
     // Visible breakage: the true driver vanishes from the drill beat
     // while the wrong part glows as the claimed driver. The learner
     // sees a hole where the cause should be.
@@ -46,7 +48,7 @@ export function createMutation(dsl: SceneDsl, seedStr?: string): Mutation | null
       hiddenNodeIds: [original],
       shiftedJointIds: [],
       probe: {
-        prompt: `This step claims ${wrong} drives it, but a part is missing from the scene. Which missing part is the true driver?`,
+        prompt: `This step claims ${labelOf(wrong)} drives it, but a part is missing from the scene. Which missing part is the true driver?`,
         answer: original,
       },
       repair: { control: `hotspot:${b.id}`, expected: original },

@@ -169,6 +169,35 @@ export const validateSceneDsl = (
           }
         }
       }
+      // No authored stages: the renderer provides the ground. A wide
+      // horizontal plane or a thin wide slab sitting on the floor would
+      // double the stage and shrink the subject to a speck.
+      const tf = (n.transform ?? {}) as Record<string, unknown>;
+      const p = Array.isArray(tf.p) ? (tf.p as unknown[]) : [];
+      const r = Array.isArray(tf.r) ? (tf.r as unknown[]) : [];
+      const s = Array.isArray(tf.s) ? (tf.s as unknown[]) : [];
+      const num = (v: unknown): number =>
+        typeof v === "number" && Number.isFinite(v) ? Math.abs(v) : 0;
+      const args = (geo?.args ?? {}) as unknown;
+      const dims = Array.isArray(args)
+        ? [num(args[0]) * (num(s[0]) || 1), num(args[1]) * (num(s[1]) || 1), num(args[2]) * (num(s[2]) || 1)]
+        : [0, 0, 0];
+      const flat = Math.abs(num(r[0]) - Math.PI / 2) < 0.15;
+      if ((n.type === "plane" || n.type === "circle") && flat && Math.max(dims[0], dims[1]) >= 8) {
+        return yield* fail(
+          `E_GROUND_PLANE: node "${n.id}" is an authored ground plane; the renderer provides the stage`
+        );
+      }
+      if (
+        n.type === "box" &&
+        dims[1] <= 1.5 &&
+        Math.max(dims[0], dims[2]) >= 8 &&
+        num(p[1]) - dims[1] / 2 <= 1.0
+      ) {
+        return yield* fail(
+          `E_GROUND_SLAB: node "${n.id}" is an authored stage slab; rest the lowest solid near y=0 instead`
+        );
+      }
     }
 
     // Compound groups: 2+ primitives sharing one label. Members must

@@ -679,9 +679,11 @@ function StageRig({
   )
 }
 
-/** Per-beat focus: the orbit target glides to the active parts and the
- * camera dollies to their size. Damped every frame (no jumps), snapped
- * on scene change. User orbits are preserved between beats. */
+/** Per-beat focus: each beat is a chapter with a canonical 3/4 view.
+ * On beat or scene change the camera cuts to target + canonical
+ * direction at the focus distance. Damped glides preserved user orbit
+ * vectors straight into occluders (e.g. behind the stage board), so
+ * beats cut instead of glide. Users orbit freely between cuts. */
 function FocusRig({
   currentBeat,
   sceneKey,
@@ -700,33 +702,19 @@ function FocusRig({
     target: THREE.Vector3
     update: () => void
   } | null
-  const goal = useRef({ beat: -1, scene: '', dist: 8 })
-  if (goal.current.scene !== sceneKey) {
-    goal.current.scene = sceneKey
-    goal.current.beat = currentBeat
-    if (!flat && controls) {
-      controls.target.copy(target)
-      controls.update()
-    }
-  } else if (goal.current.beat !== currentBeat) {
-    goal.current.beat = currentBeat
-  }
-  goal.current.dist = Math.max(radius * 3.2, 5)
-  useFrame(() => {
+  useEffect(() => {
     if (flat || !controls) return
-    controls.target.lerp(target, 0.06)
+    const dir = new THREE.Vector3(1, 0.62, 1.25).normalize()
+    const dist = Math.max(radius * 3.2, 5)
+    controls.target.copy(target)
+    camera.position.copy(target).addScaledVector(dir, dist)
     const persp = camera as THREE.PerspectiveCamera
-    const dir = camera.position.clone().sub(controls.target)
-    const len = Math.max(dir.length(), 0.001)
-    const want = goal.current.dist
-    const next = len + (want - len) * 0.06
-    dir.multiplyScalar(1 / len)
-    camera.position.copy(controls.target).addScaledVector(dir, next)
-    persp.near = Math.max(next / 100, 0.05)
-    persp.far = next * 30
+    persp.near = Math.max(dist / 100, 0.05)
+    persp.far = dist * 30
     persp.updateProjectionMatrix()
     controls.update()
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBeat, sceneKey])
   return null
 }
 /** Slow drifting dust motes. Cinematic air: the light needs

@@ -7,6 +7,7 @@ import { adaptDslToScene } from "../src/api/parser.ts";
 import { createMutation } from "../src/api/mutations.ts";
 import { DetailFor } from "../src/components/details.tsx";
 import { injectHero } from "../src/api/hero.ts";
+import { substanceTexture } from "../src/components/Scene3D.tsx";
 import type { SceneDsl } from "../src/types.ts";
 
 const GOOD = `
@@ -109,6 +110,12 @@ const run = Effect.gen(function* () {
   check("hero-skipped", noHero.nodes.length === laid.nodes.length);
   const dupHero = injectHero(withHero);
   check("hero-once", dupHero.nodes.filter((n) => n.id === "hero-scan").length === 1);
+
+  // 7. Substance fallback covers mechanical words (keys, gears, springs).
+  const subNode = (label: string, type = "cylinder") => ({ id: "x", type, parent: null, transform: { p: [0,1,0], r: [0,0,0], s: [1,1,1] }, material: { roughness: 0.5, metalness: 0.8, tint: "#C9A227" }, label, geometry: { args: [1,1,1] } });
+  check("substance-gear", (substanceTexture(subNode("large gear") as never) ?? "").includes("blue_metal_plate"));
+  check("substance-key", (substanceTexture(subNode("key bow") as never) ?? "").includes("blue_metal_plate"));
+  check("substance-spring", (substanceTexture(subNode("mainspring coil") as never) ?? "").includes("blue_metal_plate"));
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

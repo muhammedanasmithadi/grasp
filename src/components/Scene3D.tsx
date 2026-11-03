@@ -136,7 +136,8 @@ function PartNode({
  * world gets real surfaces unconditionally. Explicit maps always win. */
 const SUBSTANCE_MAPS: Array<{ words: string[]; slug: string }> = [
   { words: ['wood', 'oak', 'plank', 'beam', 'timber', 'log', 'tree', 'trunk', 'branch'], slug: 'dark_wooden_planks' },
-  { words: ['metal', 'steel', 'iron', 'aluminum', 'aluminium', 'brass', 'copper', 'shaft', 'rod', 'pipe', 'barrel', 'engine'], slug: 'metal_plate' },
+  { words: ['metal', 'steel', 'iron', 'aluminum', 'aluminium', 'shaft', 'rod', 'pipe', 'barrel', 'engine', 'axle', 'spindle'], slug: 'metal_plate' },
+  { words: ['brass', 'copper', 'bronze', 'key', 'gear', 'cog', 'spring', 'coil', 'pin', 'screw', 'bolt', 'dial', 'lock', 'hinge'], slug: 'blue_metal_plate' },
   { words: ['rock', 'stone', 'boulder', 'cliff', 'mountain', 'concrete', 'cement', 'brick'], slug: 'brown_mud_rocks_01' },
   { words: ['grass', 'lawn', 'meadow', 'field', 'ground', 'soil', 'dirt', 'earth', 'terrain'], slug: 'grass_ground' },
   { words: ['marble', 'statue'], slug: 'marble_01' },
@@ -147,7 +148,7 @@ const SUBSTANCE_MAPS: Array<{ words: string[]; slug: string }> = [
   { words: ['plaster', 'wall', 'ceiling'], slug: 'grey_plaster' },
 ]
 
-function substanceTexture(node: DslNode): string | null {
+export function substanceTexture(node: DslNode): string | null {
   if (node.type === 'tube' || node.type === 'points' || node.type === 'model') return null
   const hay = `${node.label} ${node.id}`.toLowerCase()
   for (const { words, slug } of SUBSTANCE_MAPS) {

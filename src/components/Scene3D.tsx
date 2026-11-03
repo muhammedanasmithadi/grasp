@@ -121,7 +121,7 @@ function PartNode({
           emissiveIntensity={active || isFault ? 0.35 : 0}
         />
       </mesh>
-      <Html center distanceFactor={8} occlude zIndexRange={[20, 0]}>
+      <Html center occlude zIndexRange={[20, 0]}>
         <div style={LABEL_STYLE}>
           {label}
         </div>
@@ -561,9 +561,11 @@ function faceSizeOf(node: DslNode): number {
       )}
       {showLabel && (
       /* Lifted above the solid: a tag centered inside its own part is
-      occluded by that part and never seen. */
+      occluded by that part and never seen. Constant screen size: tags
+      are UI, not scenery — distance-scaled tags shrink to illegibility
+      exactly when the camera pulls back to establish context. */
       <group position={[0, estimateExtents(node).hy + 0.7, 0]}>
-      <Html center distanceFactor={10} occlude zIndexRange={[20, 0]}>
+      <Html center occlude zIndexRange={[20, 0]}>
         <div style={LABEL_STYLE}>
           {node.label}
         </div>
@@ -604,7 +606,7 @@ function GroupLabels({
         const isFault = g.members.some((m) => faultNodeIds.includes(m))
         return (
           <group key={g.id} position={[c.x, c.y + 1.4, c.z]}>
-            <Html center distanceFactor={10} occlude zIndexRange={[20, 0]}>
+            <Html center occlude zIndexRange={[20, 0]}>
               <div
                 style={{
                   ...LABEL_STYLE,

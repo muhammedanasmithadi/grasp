@@ -35,15 +35,18 @@ export function createMutation(dsl: SceneDsl, seedStr?: string): Mutation | null
     const original = b.becauseOf[0];
     const wrong = otherNodeId(dsl, b.becauseOf, seed + b.id.length);
     if (!wrong) continue;
+    // Visible breakage: the true driver vanishes from the drill beat
+    // while the wrong part glows as the claimed driver. The learner
+    // sees a hole where the cause should be.
     return {
       mutationId: `mut_${(seed % 900) + 100}`,
       kind: 'edge_inversion',
       beatId: b.id,
       mutatedBecauseOf: { [b.id]: [wrong, ...b.becauseOf.slice(1)] },
-      hiddenNodeIds: [],
+      hiddenNodeIds: [original],
       shiftedJointIds: [],
       probe: {
-        prompt: `What actually drives this step? (shown: ${wrong})`,
+        prompt: `This step claims ${wrong} drives it, but a part is missing from the scene. Which missing part is the true driver?`,
         answer: original,
       },
       repair: { control: `hotspot:${b.id}`, expected: original },

@@ -668,6 +668,49 @@ function StageRig({
   )
 }
 
+/** Per-beat focus: when the beat changes, swing the orbit target to
+ * the active parts and dolly to their size. User orbits are preserved
+ * between beats; only beat changes refocus. */
+function FocusRig({
+  currentBeat,
+  sceneKey,
+  target,
+  radius,
+  flat,
+}: {
+  currentBeat: number
+  sceneKey: string
+  target: THREE.Vector3
+  radius: number
+  flat: boolean
+}) {
+  const camera = useThree((s) => s.camera)
+  const controls = useThree((s) => s.controls) as unknown as {
+    target: THREE.Vector3
+    update: () => void
+  } | null
+  const first = useRef(true)
+  useEffect(() => {
+    if (flat || !controls) return
+    // Skip the first mount: StageRig already framed the whole scene.
+    if (first.current) {
+      first.current = false
+      return
+    }
+    controls.target.copy(target)
+    const dir = camera.position.clone().sub(controls.target)
+    const len = Math.max(dir.length(), 0.001)
+    dir.multiplyScalar(1 / len)
+    const dist = Math.max(radius * 3.2, 4)
+    camera.position.copy(target).addScaledVector(dir, dist)
+    const persp = camera as THREE.PerspectiveCamera
+    persp.near = Math.max(dist / 100, 0.05)
+    persp.far = dist * 30
+    persp.updateProjectionMatrix()
+    controls.update()
+  }, [currentBeat, sceneKey])
+  return null
+}
 /** Slow drifting dust motes. Cinematic air: the light needs
  * something to live in. Additive, faint, always moving. */
 function DustMotes({ center, radius }: { center: THREE.Vector3; radius: number }) {
@@ -965,14 +1008,12 @@ export default function Scene3D({
     if (lum <= 0.9) return bg
     return '#e4d9bd'
   }, [bg])
-  const showAllLabels = focusNodeIds.length === 0
   const memberToGroup = useMemo(() => {
     const m = new Map<string, string>()
     for (const g of groups) for (const id of g.members) m.set(id, g.id)
     return m
   }, [groups])
-  const labelVisible = (id: string) =>
-    (showAllLabels || focusNodeIds.includes(id)) && !memberToGroup.has(id)
+  const showAllLabels = focusNodeIds.length === 0
   const nodePositions = useMemo(() => {
     const m = new Map<string, THREE.Vector3>()
     visibleNodes.forEach((n) =>
@@ -980,6 +1021,23 @@ export default function Scene3D({
     )
     return m
   }, [JSON.stringify(visibleNodes.map((n) => [n.id, n.transform.p]))])
+  const labelVisible = (id: string) =>
+    (showAllLabels || focusNodeIds.includes(id)) && !memberToGroup.has(id)
+  // Beat focus: centroid and radius of the currently active parts.
+  // Falls back to the whole-scene frame when nothing is active.
+  const focus = useMemo(() => {
+    const pts = focusNodeIds
+      .map((id) => nodePositions.get(id))
+      .filter((p): p is THREE.Vector3 => !!p)
+    if (pts.length === 0) return { target: center, radius }
+    const c = pts
+      .reduce((acc, p) => acc.add(p.clone()), new THREE.Vector3())
+      .multiplyScalar(1 / pts.length)
+    let r = 1.2
+    for (const p of pts) r = Math.max(r, c.distanceTo(p) + 1.2)
+    return { target: c, radius: Math.min(r, radius) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(focusNodeIds), center, radius])
 
   return (
     <Canvas
@@ -995,6 +1053,17 @@ export default function Scene3D({
     >
       <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat && spin} autoRotateSpeed={0.5} enableDamping onStart={() => setSpin(false)} />
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={safeBg} flat={isFlat} />
+      <FocusRig currentBeat={currentBeat} sceneKey={sceneKey} target={focus.target} radius={focus.radius} flat={isFlat} />
+      {/* Follow-spot on the active beat: the taught part reads as lit. */}
+      {!isFlat && (
+        <spotLight
+          position={[focus.target.x + 4, focus.target.y + 7, focus.target.z + 5]}
+          angle={0.5}
+          penumbra={0.8}
+          intensity={0.9}
+          color="#ffe9c4"
+        />
+      )}
       <LightRig center={center} radius={radius} />
       <Ground y={box.min.y - 0.02} size={radius} cx={center.x} cz={center.z} />
       <ContactShadows position={[center.x, box.min.y + 0.01, center.z]} scale={Math.max(radius * 5, 12)} far={radius * 2 + 4} resolution={512} blur={2.4} opacity={0.5} color="#2c2418" />

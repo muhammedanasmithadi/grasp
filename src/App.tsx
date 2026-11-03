@@ -96,7 +96,11 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'REPAIR_ATTEMPT': {
       if (!state.mutation) return state
       const correct = action.payload.nodeId === state.mutation.probe.answer
-      return { ...state, repairStatus: correct ? 'correct' : 'wrong' }
+      return {
+        ...state,
+        repairStatus: correct ? 'correct' : 'wrong',
+        masteryDelta: correct ? (state.masteryDelta ?? 0) + 10 : (state.masteryDelta ?? 0),
+      }
     }
     case 'RESOLVE_FAULT':
       return {
@@ -426,6 +430,23 @@ export default function App() {
                     <span className="drop-cap">{beat?.narration?.[0]}</span>{beat?.narration?.slice(1) || ''}
                   </div>
                   <div className="mt-4 marginalia">{isSabotage ? `Note: The ${beat?.part} beat has a causal fault. Locate the driver.` : 'Follow the causal chain through each beat.'}</div>
+                  <div className="mt-6">
+                    <div className="text-[11px] font-bold text-slate uppercase tracking-widest mb-3">How it chains together</div>
+                    <ol className="space-y-2">
+                      {beats.map((bb, i) => (
+                        <li key={String(bb.id)}>
+                          <button
+                            onClick={() => dispatch({ type: 'SET_BEAT', payload: i + 1 })}
+                            className={`w-full text-left flex items-baseline gap-2 px-3 py-2 border-2 transition-all ${i + 1 === currentBeat ? 'border-b8860b bg-white' : 'border-c9ba9e bg-transparent hover:border-b8860b'}`}
+                          >
+                            <span className="text-[11px] font-black text-b8860b">{i + 1}</span>
+                            <span className="text-[13px] font-bold text-2c2418">{bb.part}</span>
+                            <span className="text-xs font-light text-slate truncate">{bb.goal}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
                   <BeatQuiz
                     key={currentBeat}
                     prompt={dslBeats?.[currentBeat - 1]?.probe.prompt ?? ''}

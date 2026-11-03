@@ -4,8 +4,12 @@
 // Anything unparsable is refused with a named E_ error. Never faked.
 
 import type { SceneData, SceneDsl } from "../types";
+import { layoutScene } from "./layout";
 
-export function adaptDslToScene(dsl: SceneDsl): SceneData {
+export function adaptDslToScene(input: SceneDsl): SceneData {
+  // Code owns the stage: re-seat every part in causal order before
+  // the UI ever sees it. Model positions are hints, not placements.
+  const dsl = layoutScene(input);
   const labelOf = (id: string): string => {
     const n = dsl.nodes.find((x) => x.id === id);
     return n ? n.label : id;

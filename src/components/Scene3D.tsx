@@ -1048,11 +1048,19 @@ export default function Scene3D({
     (showAllLabels || focusNodeIds.includes(id)) && !memberToGroup.has(id)
   // Beat focus: centroid and radius of the currently active parts.
   // Falls back to the whole-scene frame when nothing is active. The
-  // distance respects the biggest member, not just the spread: a lone
-  // 3-unit lever at min distance fills the frame and reads as an
+  // group-mates of active parts count too: a beat spotlights an
+  // assembly, and cropping its siblings reads as a bug, not a close-up.
+  // The distance respects the biggest member, not just the spread: a
+  // lone 3-unit lever at min distance fills the frame and reads as an
   // accident, not a close-up.
   const focus = useMemo(() => {
-    const pts = focusNodeIds
+    const mateIds = new Set(focusNodeIds)
+    for (const g of groups) {
+      if (g.members.some((m) => mateIds.has(m))) {
+        for (const m of g.members) mateIds.add(m)
+      }
+    }
+    const pts = [...mateIds]
       .map((id) => nodePositions.get(id))
       .filter((p): p is THREE.Vector3 => !!p)
     if (pts.length === 0) return { target: center, radius }
@@ -1062,7 +1070,7 @@ export default function Scene3D({
     let r = 1.2
     for (const p of pts) r = Math.max(r, c.distanceTo(p) + 1.2)
     let member = 0.6
-    for (const id of focusNodeIds) {
+    for (const id of mateIds) {
       const n = visibleNodes.find((v) => v.id === id)
       if (n) member = Math.max(member, estimateExtents(n).hx)
     }

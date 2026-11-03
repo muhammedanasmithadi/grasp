@@ -177,6 +177,14 @@ const singleAttempt = (
     );
 
     const dsl = yield* parseSceneCode(content);
+    yield* Effect.sync(() =>
+      console.log(
+        `[MetaModelAPI] scene: ${dsl.nodes.length} nodes, ${dsl.groups.length} groups` +
+          (dsl.groups.length > 0
+            ? ` (${dsl.groups.map((g) => `${g.id}:${g.members.length}`).join(", ")})`
+            : "")
+      )
+    );
     return adaptDslToScene(dsl);
   });
 

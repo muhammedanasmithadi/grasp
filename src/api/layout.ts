@@ -191,7 +191,8 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   const groupOf = new Map<string, string>();
   for (const g of dsl.groups ?? []) for (const m of g.members) groupOf.set(m, g.id);
   // No giants, no specks: uniform presence for solid primitives.
-  // Rescale s so hx lands in [0.4, 2.2]; proportions preserved.
+  // Rescale s so the largest half-extent lands in [0.5, 1.6]; proportions
+  // preserved. A tall thin mast counts by height, not just girth.
   // Tubes, particles, models, and backdrops keep their own sizing.
   for (const n of row) {
     if (
@@ -199,12 +200,13 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       n.type === "plane" || n.type === "circle" || n.type === "ring"
     ) continue;
     const e = ext.get(n.id)!;
-    const clamped = Math.min(Math.max(e.hx, 0.5), 1.6);
-    const k = clamped / e.hx;
+    const biggest = Math.max(e.hx, e.hy, e.hz);
+    const clamped = Math.min(Math.max(biggest, 0.5), 1.6);
+    const k = clamped / biggest;
     if (Math.abs(k - 1) < 0.01) continue;
     const s = n.transform.s;
     n.transform = { ...n.transform, s: [s[0] * k, s[1] * k, s[2] * k] as Vec3 };
-    ext.set(n.id, { hx: clamped, hy: e.hy * k, hz: e.hz * k });
+    ext.set(n.id, { hx: e.hx * k, hy: e.hy * k, hz: e.hz * k });
   }
   let cursor = 0;
   const xs = new Map<string, number>();

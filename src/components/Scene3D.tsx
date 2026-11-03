@@ -1087,7 +1087,10 @@ export default function Scene3D({
     let member = 0.6
     for (const id of mateIds) {
       const n = visibleNodes.find((v) => v.id === id)
-      if (n) member = Math.max(member, estimateExtents(n).hx)
+      if (n) {
+        const e = estimateExtents(n)
+        member = Math.max(member, e.hx, e.hy, e.hz)
+      }
     }
     return { target: c, radius: Math.min(Math.max(r, member * 2.2), radius) }
     // eslint-disable-next-line react-hooks/exhaustive-deps

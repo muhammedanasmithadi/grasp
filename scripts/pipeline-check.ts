@@ -21,6 +21,7 @@ torus({"id":"bow","parent":null,"transform":{"p":[40,30,-15],"r":[0,0,0],"s":[1,
 box({"id":"pin1","parent":null,"transform":{"p":[-45,-25,30],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.8,"tint":"#D55E00"},"label":"pin one","geometry":{"args":[0.2,0.6,0.2]}})
 box({"id":"pin2","parent":null,"transform":{"p":[50,40,25],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.8,"tint":"#D55E00"},"label":"pin two","geometry":{"args":[0.2,0.8,0.2]}})
 box({"id":"housing","parent":null,"transform":{"p":[-15,-30,-20],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.6,"metalness":0.3,"tint":"#8a8272"},"label":"lock housing","geometry":{"args":[8,8,8]}})
+cylinder({"id":"mast","parent":null,"transform":{"p":[70,0,-40],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#8a8272"},"label":"tall mast","geometry":{"args":[0.3,0.3,8]}})
 capsule({"id":"spring","parent":null,"transform":{"p":[60,-40,30],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.8,"tint":"#E69F00"},"label":"tiny spring","geometry":{"args":[0.05,0.1]}})
 tube({"id":"beam","parent":null,"transform":{"p":[0,3,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.2,"tint":"#E69F00","emissive":"#E69F00"},"label":"light beam","geometry":{"path":[[0,3,0],[4,4,1],[7,3,2]],"radius":1.2}})
 group({"id":"grp-door","label":"door assembly","members":["door","bolt"]})
@@ -57,7 +58,10 @@ const run = Effect.gen(function* () {
   const housing = laid.nodes.find((n) => n.id === "housing")!;
   const spring = laid.nodes.find((n) => n.id === "spring")!;
   check("giant-shrunk", Math.abs(housing.transform.s[0] - 1.6 / 4) < 0.01, `s=${housing.transform.s[0].toFixed(3)}`);
-  check("speck-grown", Math.abs(spring.transform.s[0] - 0.5 / 0.05) < 0.01, `s=${spring.transform.s[0].toFixed(2)}`);
+  check("speck-grown", Math.abs(spring.transform.s[0] - 0.5 / 0.1) < 0.01, `s=${spring.transform.s[0].toFixed(2)}`);
+  const mast = laid.nodes.find((n) => n.id === "mast")!;
+  // Validator clamps the 8-tall arg to 6 first, so layout sees hy=3.
+  check("mast-capped-by-height", Math.abs(mast.transform.s[0] - 1.6 / 3) < 0.02, `s=${mast.transform.s[0].toFixed(2)}`);
   // Stability: laying out twice changes nothing (steady frame).
   const twice = adaptDslToScene(laid).dsl!;
   const same = JSON.stringify(twice.nodes.map((n) => n.transform)) === JSON.stringify(laid.nodes.map((n) => n.transform));

@@ -248,6 +248,11 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       const dy = ny - old[1];
       const dz = 0 - old[2];
       let geometry = n.geometry;
+      if (n.type === "tube") {
+        // Pin the radius too: a drainpipe-thick beam owns the frame.
+        const r = Math.min(num((n.geometry as Record<string, unknown> | undefined)?.radius) || 0.15, 0.4);
+        geometry = { ...n.geometry, radius: r };
+      }
       if (n.type === "tube" && Array.isArray(n.geometry?.path)) {
         const clamp = (v: number, c: number): number =>
           c + Math.max(-5, Math.min(5, v - c));

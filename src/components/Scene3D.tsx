@@ -1147,7 +1147,7 @@ export default function Scene3D({
       />
       {!isFlat && (
         <EffectComposer multisampling={4}>
-          <Bloom mipmapBlur intensity={0.6} luminanceThreshold={0.9} luminanceSmoothing={0.2} />
+          <Bloom mipmapBlur intensity={0.45} luminanceThreshold={1.0} luminanceSmoothing={0.25} />
           <HueSaturation saturation={0.14} />
           <BrightnessContrast contrast={0.08} />
           <Vignette eskil={false} offset={0.32} darkness={0.35} />

@@ -2,7 +2,6 @@ import React, { useReducer, useState, useCallback, useMemo } from 'react'
 import { Effect } from 'effect'
 import { metaModelAPI } from './api/client'
 import { createMutation } from './api/mutations'
-import { verifyScene } from './api/verify'
 import Scene3D from './components/Scene3D'
 import Scene2D from './components/Scene2D'
 import type { AppState, AppAction, SceneData, Beat } from './types'
@@ -314,6 +313,8 @@ function DrillPanel({
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [railTab, setRailTab] = useState<'spine' | 'read' | 'repair'>('spine')
+  const [playing, setPlaying] = useState(true)
+  const [speed, setSpeed] = useState(1)
 
   const {
     screen,
@@ -384,15 +385,18 @@ export default function App() {
     [dslBeats, totalDuration]
   )
   const medium = sceneData?.dsl?.concept?.medium ?? '3d'
-  const verification = useMemo(
-    () => (sceneData?.dsl ? verifyScene(sceneData.dsl) : null),
-    [sceneData]
-  )
+  const representation = sceneData?.representation ?? 'illustrative-3d'
   const badgeLabel = onDrillBeat
     ? 'Fault'
-    : verification?.badge === 'solver'
-      ? 'Solver-verified'
-      : 'Sketch'
+    : representation === 'template-3d'
+      ? 'Interactive model'
+      : representation === 'diagram-2d'
+        ? 'Diagram'
+        : 'Illustrative'
+  const qualityNote =
+    sceneData?.qualityScore !== undefined && sceneData.qualityScore < 70
+      ? ` · quality ${sceneData.qualityScore}/100`
+      : ''
 
   const handleAsk = useCallback(async () => {
     if (!query.trim()) return
@@ -537,11 +541,27 @@ export default function App() {
                   <div className="absolute inset-0 border-2 border-white/40 pointer-events-none" />
                   {medium === '2d' ? (
                     <Scene2D
-                      items={beats}
-                      currentBeat={currentBeat}
-                      sabotageBeatIndex={sabotageBeatIndex}
-                      sabotageMode={sabotageMode}
-                      faultPart={beats[sabotageBeatIndex - 1]?.part ?? null}
+                      nodes={(sceneData?.dsl?.nodes ?? []).map((n) => ({
+                        id: n.id,
+                        label: n.label,
+                        sub: beats.find((b) => b.part === n.label)?.goal,
+                      }))}
+                      edges={
+                        sceneData?.dsl?.edges && sceneData.dsl.edges.length > 0
+                          ? sceneData.dsl.edges
+                          : beats.slice(0, -1).map((b, i) => ({
+                              from: dslNodes.find((n) => n.label === b.part)?.id ?? '',
+                              to: dslNodes.find((n) => n.label === beats[i + 1]?.part)?.id ?? '',
+                              rel: 'next in lesson',
+                            })).filter((e) => e.from && e.to)
+                      }
+                      sequential={!sceneData?.dsl?.edges || sceneData.dsl.edges.length === 0}
+                      activeNodeId={activeNodeIds[0] ?? null}
+                      faultNodeId={shownFaultNodeIds[0] ?? null}
+                      onSelect={(nodeId) => {
+                        const idx = dslBeats?.findIndex((b) => b.becauseOf.includes(nodeId)) ?? -1
+                        if (idx >= 0) dispatch({ type: 'SET_BEAT', payload: idx + 1 })
+                      }}
                     />
                   ) : (
                     <Scene3D
@@ -555,8 +575,18 @@ export default function App() {
                       hiddenNodeIds={shownHiddenNodeIds}
                       joints={dslJoints}
                       groups={sceneData?.dsl?.groups ?? []}
+                      edges={sceneData?.dsl?.edges ?? []}
+                      templateParams={
+                        sceneData?.dsl?.concept.templateParams
+                          ? {
+                              crankRadius: sceneData.dsl.concept.templateParams.crankRadius ?? 0.9,
+                              rodLength: sceneData.dsl.concept.templateParams.rodLength ?? 3.2,
+                            }
+                          : undefined
+                      }
+                      speed={speed}
                       time={beatTime}
-                      playing
+                      playing={playing}
                       medium={medium}
                       backdrop={sceneData?.dsl?.theme?.backdrop}
                       focusNodeIds={[...activeNodeIds, ...shownFaultNodeIds]}
@@ -588,7 +618,7 @@ export default function App() {
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-[11px] font-bold text-slate uppercase tracking-widest">Causal spine</h3>
-                    <span className={`inline-flex items-center gap-2 px-3 py-1 border-2 ${sabotageMode ? 'border-a04000 bg-fdeee2 text-a04000' : verification?.badge === 'solver' ? 'border-009e73 bg-009e73/5 text-009e73' : 'border-c9ba9e bg-white text-slate'} text-[10px] font-bold uppercase tracking-tighter`}>{badgeLabel}</span>
+                    <span className={`inline-flex items-center gap-2 px-3 py-1 border-2 ${sabotageMode ? 'border-a04000 bg-fdeee2 text-a04000' : representation === 'template-3d' ? 'border-009e73 bg-009e73/5 text-009e73' : 'border-c9ba9e bg-white text-slate'} text-[10px] font-bold uppercase tracking-tighter`}>{badgeLabel}{qualityNote}</span>
                   </div>
                   <div className="space-y-4">
                     {(sceneData?.causalSpine ?? beats.map((b, i) => ({
@@ -719,6 +749,29 @@ export default function App() {
                 <span className="w-3 h-3 bg-009e73"></span>
                 <span>{badgeLabel}</span>
               </div>
+              <button
+                className="shrink-0 px-3 py-1 border-2 border-c9ba9e bg-white text-[11px] font-bold text-2c2418 uppercase tracking-widest hover:border-b8860b"
+                onClick={() => setPlaying((v) => !v)}
+                aria-label={playing ? 'Pause motion' : 'Play motion'}
+              >
+                {playing ? 'Pause' : 'Play'}
+              </button>
+              {representation === 'template-3d' && (
+                <label className="flex items-center gap-2 text-[10px] font-bold text-slate uppercase tracking-widest whitespace-nowrap">
+                  Speed
+                  <input
+                    type="range"
+                    min={0.25}
+                    max={2}
+                    step={0.25}
+                    value={speed}
+                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                    className="w-20 range-slider"
+                    aria-label="Crank speed"
+                  />
+                  {speed}×
+                </label>
+              )}
               <div className="text-[11px] font-mono font-bold text-b8860b whitespace-nowrap">+{masteryDelta ?? 0}%</div>
               <div className="text-[10px] font-mono text-slate uppercase tracking-widest whitespace-nowrap">
                 Beat {currentBeat} of {beats.length} · {medium}

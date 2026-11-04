@@ -13,32 +13,6 @@ function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? Math.abs(v) : 0;
 }
 
-/** Authored stage pieces the model was told not to make. Dropped
- * silently: a stripped slab beats a failed world. */
-function isAuthoredStage(n: DslNode): boolean {
-  const a = n.geometry?.args;
-  const arr = Array.isArray(a) ? a : [];
-  const s = n.transform.s;
-  const dims = [
-    num(arr[0]) * (num(s[0]) || 1),
-    num(arr[1]) * (num(s[1]) || 1),
-    num(arr[2]) * (num(s[2]) || 1),
-  ];
-  const flat = Math.abs(num(n.transform.r[0]) - Math.PI / 2) < 0.15;
-  if ((n.type === "plane" || n.type === "circle" || n.type === "ring") && flat && Math.max(dims[0], dims[1]) >= 8) {
-    return true;
-  }
-  if (
-    n.type === "box" &&
-    dims[1] <= 1.5 &&
-    Math.max(dims[0], dims[2]) >= 8 &&
-    num(n.transform.p[1]) - dims[1] / 2 <= 1.0
-  ) {
-    return true;
-  }
-  return false;
-}
-
 /** Half-extents (hx, hy, hz) of a node in world units. */
 export interface Extents { hx: number; hy: number; hz: number }
 
@@ -171,6 +145,9 @@ function causalOrder(dsl: SceneDsl): DslNode[] {
  * their node. Returns a new SceneDsl; the input is untouched.
  */
 export function layoutScene(dsl: SceneDsl): SceneDsl {
+  // Template scenes are code-authored contracts: their geometry is the
+  // mechanism. Never rearrange, resize, or re-seat them.
+  if (dsl.concept.template) return dsl;
   // Copy: placement never mutates the validated input.
   const ordered = causalOrder(dsl)
     .filter((n) => !isBackdropNode(n))
@@ -186,7 +163,9 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   for (const b of dsl.beats) for (const ref of b.becauseOf ?? []) referencedByBeats.add(ref);
   const isEffect = (n: DslNode): boolean =>
     n.type === "points" || (n.type === "tube" && !referencedByBeats.has(n.id));
-  const row = ordered.filter((n) => !isEffect(n));
+  // Parented nodes take no row slot: they follow their parent with the
+  // authored relative offset preserved (a key stays inside its housing).
+  const row = ordered.filter((n) => !isEffect(n) && !n.parent);
   const effects = ordered.filter(isEffect);
   const ext = new Map<string, Extents>();
   for (const n of row) {
@@ -204,6 +183,21 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   // Tubes keep authorial scale (rescaling s would warp world-unit
   // paths) but cap the slot they reserve so one hose never sizes
   // the street. Particles and backdrops keep their own sizing.
+  // Assembly-preserving presence: one uniform factor per group (or per
+  // solo node), derived from the group's largest member. Relative sizes
+  // inside an assembly are never distorted; only the whole assembly
+  // scales. Models are capped, never grown. Tubes keep authorial scale
+  // (rescaling s would warp world-unit paths) but cap their slot.
+  const ownTarget = (n: DslNode, biggest: number): number =>
+    n.type === "model" ? Math.min(biggest, 1.2) : Math.min(Math.max(biggest, 0.5), 1.2);
+  const groupMax = new Map<string, number>();
+  for (const n of row) {
+    const gid = groupOf.get(n.id);
+    if (!gid || n.type === "tube") continue;
+    const e = ext.get(n.id)!;
+    const biggest = Math.max(e.hx, e.hy, e.hz);
+    groupMax.set(gid, Math.max(groupMax.get(gid) ?? 0, biggest));
+  }
   for (const n of row) {
     if (
       n.type === "points" ||
@@ -218,11 +212,11 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       });
       continue;
     }
+    const gid = groupOf.get(n.id);
+    const basis = gid ? groupMax.get(gid)! : Math.max(e.hx, e.hy, e.hz);
     const biggest = Math.max(e.hx, e.hy, e.hz);
-    const clamped = n.type === "model"
-      ? Math.min(biggest, 1.2)
-      : Math.min(Math.max(biggest, 0.5), 1.2);
-    const k = clamped / biggest;
+    const k = basis > 0 ? ownTarget(n, basis) / basis : 1;
+    void biggest;
     if (Math.abs(k - 1) < 0.01) continue;
     const s = n.transform.s;
     n.transform = { ...n.transform, s: [s[0] * k, s[1] * k, s[2] * k] as Vec3 };
@@ -261,8 +255,9 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   const squeeze = total > 16 ? 16 / total : 1;
   const zOf = (n: DslNode): number => staggerZ.get(groupOf.get(n.id) ?? `__solo:${n.id}`) ?? 0;
   const placed = new Map(ordered.map((n) => [n.id, n]));
-  const dropped = new Set(dsl.nodes.filter(isAuthoredStage).map((n) => n.id));
-  const nodes = dsl.nodes.map((n) => {
+  // Nothing is ever deleted here. Wide or stage-like parts are kept and
+  // validated like everything else; layout only re-seats row solids.
+  const placeOne = (n: (typeof dsl.nodes)[number]): (typeof dsl.nodes)[number] => {
     const src = placed.get(n.id) ?? n;
     const effIdx = effects.findIndex((e) => e.id === n.id);
     if (effIdx >= 0) {
@@ -334,7 +329,45 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       transform: { ...src.transform, p: [nx, ny, nz] as Vec3 },
       geometry,
     };
-  }).filter((n) => !dropped.has(n.id));
-  if (dropped.size > 0) console.info(`[layout] stripped authored stage: ${[...dropped].join(", ")}`);
+  };
+  const out = new Map<string, (typeof dsl.nodes)[number]>();
+  for (const n of dsl.nodes) {
+    if (!n.parent) out.set(n.id, placeOne(n));
+  }
+  // Children follow their parent: placed parent position plus the
+  // authored relative offset, so assemblies keep their internal layout.
+  const authored = new Map(dsl.nodes.map((n) => [n.id, n]));
+  let pending = dsl.nodes.filter((n) => n.parent);
+  for (let guard = 0; guard <= dsl.nodes.length && pending.length > 0; guard++) {
+    const next: typeof pending = [];
+    for (const n of pending) {
+      const parentPlaced = out.get(n.parent!);
+      const parentAuthored = authored.get(n.parent!);
+      if (!parentPlaced || !parentAuthored) {
+        next.push(n);
+        continue;
+      }
+      const d: Vec3 = [
+        n.transform.p[0] - parentAuthored.transform.p[0],
+        n.transform.p[1] - parentAuthored.transform.p[1],
+        n.transform.p[2] - parentAuthored.transform.p[2],
+      ];
+      const src = placed.get(n.id) ?? n;
+      out.set(n.id, {
+        ...n,
+        transform: {
+          ...src.transform,
+          p: [
+            parentPlaced.transform.p[0] + d[0],
+            parentPlaced.transform.p[1] + d[1],
+            parentPlaced.transform.p[2] + d[2],
+          ] as Vec3,
+        },
+      });
+    }
+    pending = next;
+  }
+  for (const n of pending) out.set(n.id, n); // unreachable: validator rejects bad parents
+  const nodes = dsl.nodes.map((n) => out.get(n.id) ?? n);
   return { ...dsl, nodes };
 }

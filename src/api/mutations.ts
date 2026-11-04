@@ -19,8 +19,12 @@ function otherNodeId(dsl: SceneDsl, exclude: string[], seed: number): string | n
 }
 
 /**
- * Deterministic mutation builder. No model calls. Priority:
- * edge_inversion -> phase_offset (hinge) -> node_deletion -> ratio_reversal (gear).
+ * Deterministic mutation builder. No model calls. Only two kinds, both
+ * honestly rendered: edge_inversion (the true driver is hidden on the
+ * drill beat while a wrong part is spotlighted) and node_deletion (a
+ * part is missing). Timing/gear faults are not offered: the renderer
+ * does not implement phase or ratio changes, so claiming them would
+ * be a lie. shiftedJointIds is always empty and unused by the UI.
  */
 export function createMutation(dsl: SceneDsl, seedStr?: string): Mutation | null {
   const seed = hashSeed(seedStr ?? dsl.concept.question);
@@ -55,27 +59,7 @@ export function createMutation(dsl: SceneDsl, seedStr?: string): Mutation | null
     };
   }
 
-  // 2. Phase offset: shift a hinge driver by 180 deg.
-  const hinge = dsl.joints.find((j) => j.type === 'hinge');
-  if (hinge) {
-    const targetBeat =
-      dsl.beats.find((b) => b.becauseOf.includes(hinge.b)) ?? dsl.beats[seed % dsl.beats.length];
-    return {
-      mutationId: `mut_${(seed % 900) + 100}`,
-      kind: 'phase_offset',
-      beatId: targetBeat.id,
-      mutatedBecauseOf: {},
-      hiddenNodeIds: [],
-      shiftedJointIds: [hinge.id],
-      probe: {
-        prompt: 'The timing looks off. Which driven part is out of phase?',
-        answer: hinge.b,
-      },
-      repair: { control: `hotspot:${hinge.b}`, expected: hinge.b },
-    };
-  }
-
-  // 3. Node deletion: remove a non-critical node and its joints.
+  // 2. Node deletion: remove a non-critical node and its joints.
   if (dsl.nodes.length > 1) {
     const victim = dsl.nodes[seed % dsl.nodes.length];
     const stillReferenced = dsl.beats.some((b) => b.becauseOf.length > 1 && b.becauseOf.includes(victim.id));
@@ -91,21 +75,6 @@ export function createMutation(dsl: SceneDsl, seedStr?: string): Mutation | null
       shiftedJointIds: [],
       probe: { prompt: 'A part is missing from the scene. Which one?', answer: removedId },
       repair: { control: 'hotspot:missing', expected: removedId },
-    };
-  }
-
-  // 4. Ratio reversal: only when a gear joint exists.
-  const gear = dsl.joints.find((j) => j.type === 'gear');
-  if (gear) {
-    return {
-      mutationId: `mut_${(seed % 900) + 100}`,
-      kind: 'ratio_reversal',
-      beatId: dsl.beats[seed % dsl.beats.length].id,
-      mutatedBecauseOf: {},
-      hiddenNodeIds: [],
-      shiftedJointIds: [gear.id],
-      probe: { prompt: 'The turns ratio is inverted. Which driven gear is wrong?', answer: gear.b },
-      repair: { control: `hotspot:${gear.b}`, expected: gear.b },
     };
   }
 

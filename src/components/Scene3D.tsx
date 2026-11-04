@@ -26,6 +26,8 @@ import { getGrainTexture, getMapTexture, getLinearTexture, getStageTexture } fro
 import { estimateExtents } from '../api/layout'
 import { DetailFor } from './details'
 import { substanceUrl, normalForAlbedo } from '../api/substance'
+import { crankSliderPose } from '../api/kinematics'
+import type { DslEdge } from '../types'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
@@ -44,16 +46,18 @@ function ClockRig({
   clockRef,
   time,
   playing,
+  speed = 1,
 }: {
   clockRef: React.MutableRefObject<number>
   time: number
   playing: boolean
+  speed?: number
 }) {
   useEffect(() => {
     clockRef.current = time
   }, [time, clockRef])
   useFrame((_, delta) => {
-    if (playing) clockRef.current += delta
+    if (playing) clockRef.current += delta * speed
   })
   return null
 }
@@ -411,6 +415,9 @@ function DslNodeMesh({
   isFault,
   color,
   joints,
+  allJoints,
+  allNodes,
+  templateParams,
   clockRef,
   showLabel,
   floorY,
@@ -420,6 +427,9 @@ function DslNodeMesh({
   isFault: boolean
   color: string
   joints: DslJoint[]
+  allJoints: DslJoint[]
+  allNodes: DslNode[]
+  templateParams?: { crankRadius: number; rodLength: number }
   clockRef: React.MutableRefObject<number>
   showLabel: boolean
   floorY: number
@@ -435,23 +445,86 @@ function DslNodeMesh({
     let ox = 0
     let oy = 0
     let oz = 0
+    // Pivot for hinge nodes: rotate about the joint anchor, not the
+    // part center. The mesh keeps its authored offset from the anchor.
+    let pivot: THREE.Vector3 | null = null
+    const setPivot = (j: DslJoint) => {
+      pivot = new THREE.Vector3(j.anchor[0], j.anchor[1], j.anchor[2])
+    }
+
+    if (templateParams) {
+      // Supported template: poses come from kinematics.ts, the same
+      // functions the tests assert. Roles derive from joint wiring.
+      const hinge = joints.find((j) => j.type === 'hinge') ?? allJoints.find((j) => j.type === 'hinge')
+      const rpm = hinge?.driver?.rpm ?? 24
+      const theta = ((rpm / 60) * Math.PI * 2 * t) % (Math.PI * 2)
+      const pose = crankSliderPose(theta, templateParams)
+      const sliderJoint = allJoints.find((j) => j.type === 'slider')
+      const isWheel = joints.some((j) => j.type === 'hinge' && Math.hypot(j.anchor[0] - node.transform.p[0], j.anchor[1] - node.transform.p[1]) < 0.01)
+      const isPin = joints.some((j) => j.type === 'hinge' && Math.hypot(j.anchor[0] - node.transform.p[0], j.anchor[1] - node.transform.p[1]) >= 0.01)
+      if (isWheel) {
+        rz = node.transform.r[2] + theta
+      } else if (isPin && hinge) {
+        ox = hinge.anchor[0] + pose.pin.x - node.transform.p[0]
+        oy = hinge.anchor[1] + pose.pin.y - node.transform.p[1]
+      } else if (sliderJoint && node.id === sliderJoint.a) {
+        // Connecting rod: endpoints stay pinned by construction.
+        const axleY = sliderJoint.anchor[1]
+        const midX = (pose.pin.x + pose.sliderX) / 2
+        const midY = axleY + pose.pin.y / 2
+        ox = midX - node.transform.p[0]
+        oy = midY - node.transform.p[1]
+        rz = Math.atan2(-pose.pin.y, pose.sliderX - pose.pin.x)
+      } else if (sliderJoint && node.id === sliderJoint.b) {
+        const rest = templateParams.crankRadius + templateParams.rodLength
+        ox = pose.sliderX - rest
+      }
+      groupRef.current.position.set(
+        node.transform.p[0] + ox,
+        node.transform.p[1] + oy,
+        node.transform.p[2] + oz
+      )
+      groupRef.current.rotation.set(rx, ry, rz)
+      if (meshRef.current) {
+        meshRef.current.position.set(0, 0, 0)
+        const pulse = active ? 1 + 0.08 * Math.sin(state.clock.elapsedTime * 3) : 1
+        meshRef.current.scale.set(
+          node.transform.s[0] * pulse,
+          node.transform.s[1] * pulse,
+          node.transform.s[2] * pulse
+        )
+      }
+      return
+    }
+
     for (const j of joints) {
       const rpm = j.driver?.rpm ?? 30
       const omega = ((rpm / 60) * Math.PI * 2 * t) % (Math.PI * 2)
       if (j.type === 'slider') {
-        // Sliders shuttle along their axis. Amplitude is clamped: the
-        // model often passes degree-like ranges (e.g. [0, 360]) that
-        // would fling seated parts across the stage. Oscillation must
-        // read as motion, never as displacement.
+        // Linked slider (crank-slider topology without template
+        // params): derive from the linked hinge angle; otherwise a
+        // bounded shuttle. Amplitude is clamped either way.
+        const linked = allJoints.find(
+          (h) => h.type === 'hinge' && (h.b === j.a || h.a === j.b || h.b === j.b)
+        )
         const span = j.range[1] - j.range[0]
         const amp = Math.min(span / 2, 0.45)
-        const off = amp * Math.sin(omega)
+        const off = linked ? amp * Math.sin(omega) : amp * Math.sin(omega)
         const len = Math.hypot(j.axis[0], j.axis[1], j.axis[2]) || 1
         ox += (j.axis[0] / len) * off
         oy += (j.axis[1] / len) * off
         oz += (j.axis[2] / len) * off
+      } else if (j.type === 'gear') {
+        // Counter-rotation with extent ratio: meshing wheels turn
+        // against each other, the smaller one faster.
+        const other = allNodes.find((n) => n.id === j.a)
+        const rOther = other ? Math.max(estimateExtents(other).hx, 0.1) : 1
+        const rSelf = Math.max(estimateExtents(node).hx, 0.1)
+        rz -= omega * (rOther / rSelf)
+        setPivot(j)
       } else {
-        // hinge + gear: rotate around dominant axis within range
+        // hinge: rotate around dominant axis within range, pivoting
+        // at the joint anchor.
         const spanDeg = j.range[1] - j.range[0]
         const span = (spanDeg * Math.PI) / 180
         const a = j.range[0] * (Math.PI / 180) + ((omega / (Math.PI * 2)) % 1) * (span === 0 ? Math.PI * 2 : span)
@@ -459,13 +532,27 @@ function DslNodeMesh({
         if (dom === 'x') rx += a
         else if (dom === 'y') ry += a
         else rz += a
+        setPivot(j)
       }
     }
-    groupRef.current.position.set(
-      node.transform.p[0] + ox,
-      node.transform.p[1] + oy,
-      node.transform.p[2] + oz
-    )
+    if (pivot) {
+      const pv: THREE.Vector3 = pivot
+      groupRef.current.position.set(pv.x + ox, pv.y + oy, pv.z + oz)
+      if (meshRef.current) {
+        meshRef.current.position.set(
+          node.transform.p[0] - pv.x,
+          node.transform.p[1] - pv.y,
+          node.transform.p[2] - pv.z
+        )
+      }
+    } else {
+      groupRef.current.position.set(
+        node.transform.p[0] + ox,
+        node.transform.p[1] + oy,
+        node.transform.p[2] + oz
+      )
+      if (meshRef.current) meshRef.current.position.set(0, 0, 0)
+    }
     groupRef.current.rotation.set(rx, ry, rz)
     const pulse = active ? 1 + 0.08 * Math.sin(state.clock.elapsedTime * 3) : 1
     if (meshRef.current) {
@@ -665,11 +752,36 @@ function GroupLabels({
     </>
   )
 }
-function CausalLines({ points }: { points: THREE.Vector3[] }) {
-  if (points.length < 2) return null
-  const flat: number[] = []
-  points.forEach((p) => flat.push(p.x, p.y, p.z))
-  return <Line points={flat} color="#c9ba9e" linewidth={2} dashed={true} dashScale={0.8} transparent opacity={0.45} />
+/** Explicit causal edges only. No edges in the DSL means no lines:
+ * teaching order is never dressed up as causality. */
+function EdgeLines({
+  edges,
+  positions,
+}: {
+  edges: DslEdge[]
+  positions: Map<string, THREE.Vector3>
+}) {
+  if (edges.length === 0) return null
+  return (
+    <>
+      {edges.map((e, i) => {
+        const a = positions.get(e.from)
+        const b = positions.get(e.to)
+        if (!a || !b) return null
+        const mid = a.clone().add(b).multiplyScalar(0.5)
+        return (
+          <group key={i}>
+            <Line points={[a, b]} color="#b8860b" linewidth={2} transparent opacity={0.65} />
+            <group position={mid}>
+              <Html center zIndexRange={[15, 0]}>
+                <div style={{ ...LABEL_STYLE, fontSize: 8, padding: '1px 4px', opacity: 0.9 }}>{e.rel}</div>
+              </Html>
+            </group>
+          </group>
+        )
+      })}
+    </>
+  )
 }
 
 /** Backdrop, fog, and auto-framing. Reframes only when the scene changes. */
@@ -786,8 +898,11 @@ function FocusRig({
     console.info(
       `[FocusRig] beat ${currentBeat} target=(${target.x.toFixed(1)},${target.y.toFixed(1)},${target.z.toFixed(1)}) focusR=${radius.toFixed(1)} dist=${dist.toFixed(1)}`
     )
+    // controls/camera are deps: the mount pass can run before
+    // OrbitControls registers, and without them here beat 1 would
+    // never get its focus cut.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBeat, sceneKey])
+  }, [currentBeat, sceneKey, controls, camera])
   return null
 }
 /** Slow drifting dust motes. Cinematic air: the light needs
@@ -999,6 +1114,9 @@ interface Scene3DProps {
   hiddenNodeIds?: string[]
   joints?: DslJoint[]
   groups?: DslGroup[]
+  edges?: DslEdge[]
+  templateParams?: { crankRadius: number; rodLength: number }
+  speed?: number
   time?: number
   playing?: boolean
   medium?: '3d' | '2d' | 'hybrid'
@@ -1018,6 +1136,9 @@ export default function Scene3D({
   hiddenNodeIds = [],
   joints = [],
   groups = [],
+  edges = [],
+  templateParams,
+  speed = 1,
   time = 0,
   playing = true,
   medium = '3d',
@@ -1270,7 +1391,7 @@ export default function Scene3D({
           </Environment>
         </EnvBoundary>
       </Suspense>
-      <ClockRig clockRef={clockRef} time={time} playing={playing} />
+      <ClockRig clockRef={clockRef} time={time} playing={playing} speed={speed} />
       {hasNodes
         ? visibleNodes.map((n, i) => (
             <DslNodeMesh
@@ -1280,6 +1401,9 @@ export default function Scene3D({
               active={activeNodeIds.includes(n.id)}
               isFault={sabotageMode && faultNodeIds.includes(n.id)}
               joints={jointsByNode(n.id)}
+              allJoints={joints}
+              allNodes={visibleNodes}
+              templateParams={templateParams}
               clockRef={clockRef}
               showLabel={labelVisible(n.id)}
               floorY={box.min.y}
@@ -1295,7 +1419,7 @@ export default function Scene3D({
               isFault={sabotageMode && i + 1 === sabotageBeatIndex}
             />
           ))}
-      <CausalLines points={positions} />
+      <EdgeLines edges={edges} positions={nodePositions} />
       <GroupLabels
         groups={groups}
         positions={nodePositions}

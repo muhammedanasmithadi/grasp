@@ -9,6 +9,13 @@ import { DetailFor } from "../src/components/details.tsx";
 import { injectHero } from "../src/api/hero.ts";
 import { scoreSceneDsl, ACCEPT_SCORE } from "../src/api/quality.ts";
 import { particleBehavior } from "../src/components/Scene3D.tsx";
+import { normalizeArgs } from "../src/api/sceneCode.ts";
+import { verifyScene } from "../src/api/verify.ts";
+import { crankSliderScene, matchTemplate } from "../src/api/templates.ts";
+import { crankSliderPose, sliderPosition, validCrankSlider } from "../src/api/kinematics.ts";
+import { layoutDiagram } from "../src/components/diagramLayout.ts";
+import { validateReferences } from "../src/api/validateDsl.ts";
+import { readFileSync } from "node:fs";
 import { normalForAlbedo } from "../src/api/substance.ts";
 import { substanceTexture, liftBlackTint, brightFaceTint, tubePointsRelative } from "../src/components/Scene3D.tsx";
 import type { SceneDsl } from "../src/types.ts";
@@ -81,8 +88,8 @@ const run = Effect.gen(function* () {
   check("giant-shrunk", Math.abs(housing.transform.s[0] - 1.2 / 4) < 0.01, `s=${housing.transform.s[0].toFixed(3)}`);
   check("speck-grown", Math.abs(spring.transform.s[0] - 0.5 / 0.1) < 0.01, `s=${spring.transform.s[0].toFixed(2)}`);
   const mast = laid.nodes.find((n) => n.id === "mast")!;
-  // Validator clamps the 8-tall arg to 6 first, so layout sees hy=3.
-  check("mast-capped-by-height", Math.abs(mast.transform.s[0] - 1.2 / 3) < 0.02, `s=${mast.transform.s[0].toFixed(2)}`);
+  // Cylinder height cap is 16, so layout sees hy=4 for the 8-tall mast.
+  check("mast-capped-by-height", Math.abs(mast.transform.s[0] - 1.2 / 4) < 0.02, `s=${mast.transform.s[0].toFixed(2)}`);
   // Stability: laying out twice changes nothing (steady frame).
   const twice = adaptDslToScene(laid).dsl!;
   const same = JSON.stringify(twice.nodes.map((n) => n.transform)) === JSON.stringify(laid.nodes.map((n) => n.transform));
@@ -124,7 +131,7 @@ const run = Effect.gen(function* () {
   const SLAB = GOOD + 'box({"id":"slab","parent":null,"transform":{"p":[0,0,0],"r":[-1.5708,0,0],"s":[1,1,1]},"material":{"roughness":0.9,"metalness":0,"tint":"#8a8272"},"label":"stage slab","geometry":{"args":[16,0.5,16]}})\n';
   const withSlab = (yield* parseSceneCode(SLAB)) as SceneDsl;
   const laidSlab = adaptDslToScene(withSlab).dsl!;
-  check("slab-stripped", !laidSlab.nodes.some((n) => n.id === "slab"), `${laidSlab.nodes.length} nodes kept`);
+  check("slab-kept", laidSlab.nodes.some((n) => n.id === "slab"), `${laidSlab.nodes.length} nodes kept`);
 
   // 6. Hero injection: matching concepts gain a verified scan, others untouched.
   const drillDsl = { ...laid, concept: { ...laid.concept, question: "how a power drill drives screws" } };
@@ -213,6 +220,61 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   check("hero-fox", injectHero(foxDsl as SceneDsl).nodes.some((n) => n.label === "fox"));
   const truckDsl = { ...laid, concept: { ...laid.concept, question: "how a truck delivers milk" } };
   check("hero-truck", injectHero(truckDsl as SceneDsl).nodes.some((n) => n.label === "truck"));
+
+  // 18. Geometry contract: segments are not dimensions.
+  check("sphere-segments-kept", JSON.stringify(normalizeArgs("sphere", [1, 32, 32])) === "[1,32,32]", JSON.stringify(normalizeArgs("sphere", [1, 32, 32])));
+  check("cylinder-shorthand", JSON.stringify(normalizeArgs("cylinder", [0.4, 2])) === "[0.4,0.4,2,24]", JSON.stringify(normalizeArgs("cylinder", [0.4, 2])));
+  check("cylinder-full", JSON.stringify(normalizeArgs("cylinder", [0.3, 0.5, 2, 48])) === "[0.3,0.5,2,48]");
+
+  // 19. Honest verification: a lock with hinge+slider earns no solver badge.
+  check("lock-not-solver", verifyScene(laid).badge === "illustrative", verifyScene(laid).badge);
+  check("template-interactive", verifyScene(crankSliderScene("how a crankshaft works")).badge === "interactive");
+
+  // 20. Assembly preservation: a key parented inside a housing keeps
+  // its relative offset and the pair scales by one uniform factor.
+  const LOCK = GOOD.replace('cylinder({"id":"plug"', 'cylinder({"id":"keybit","parent":"door","transform":{"p":[19,10,14],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.35,"metalness":0.9,"tint":"#C9A227"},"label":"key bit","geometry":{"args":[0.2,0.2,0.8]}})\ncylinder({"id":"plug"');
+  const lockLaid = adaptDslToScene((yield* parseSceneCode(LOCK)) as SceneDsl).dsl!;
+  const doorN = lockLaid.nodes.find((n) => n.id === "door")!;
+  const bitN = lockLaid.nodes.find((n) => n.id === "keybit")!;
+  check("key-follows-parent", Math.abs((bitN.transform.p[0] - doorN.transform.p[0]) - 1) < 0.01 && Math.abs((bitN.transform.p[1] - doorN.transform.p[1]) - 1) < 0.01, `d=(${bitN.transform.p[0] - doorN.transform.p[0]},${bitN.transform.p[1] - doorN.transform.p[1]})`);
+  check("refs-resolve", validateReferences(lockLaid) === null, validateReferences(lockLaid) ?? "ok");
+
+  // 21. Crank-slider kinematics across the whole cycle.
+  const P = { crankRadius: 0.9, rodLength: 3.2 };
+  let rodOk = true;
+  let prevX = Infinity;
+  let monotonicSegments = 0;
+  void prevX; void monotonicSegments;
+  for (let i = 0; i <= 32; i++) {
+    const th = (i / 32) * Math.PI * 2;
+    const pose = crankSliderPose(th, P);
+    const d = Math.hypot(pose.sliderX - pose.pin.x, 0 - pose.pin.y);
+    if (Math.abs(d - P.rodLength) > 1e-6) rodOk = false;
+    if (!(sliderPosition(th, P) >= P.rodLength - P.crankRadius - 1e-9 && sliderPosition(th, P) <= P.rodLength + P.crankRadius + 1e-9)) rodOk = false;
+  }
+  check("rod-stays-connected", rodOk);
+  check("invalid-params-rejected", !validCrankSlider({ crankRadius: 2, rodLength: 1.5 }) && validCrankSlider(P));
+  const tpl = crankSliderScene("how a crankshaft turns a piston");
+  check("template-bypasses-layout", adaptDslToScene(tpl).dsl!.nodes.find((n) => n.id === "piston")!.transform.p[0] === tpl.nodes.find((n) => n.id === "piston")!.transform.p[0]);
+  check("template-representation", adaptDslToScene(tpl).representation === "template-3d", adaptDslToScene(tpl).representation);
+  check("template-routing", matchTemplate("how a crankshaft works") === "crank-slider" && matchTemplate("how a lock works") === null);
+
+  // 22. Diagram layout: 8 nodes fit, branches branch, long labels survive.
+  const seq8 = layoutDiagram(Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, label: `step ${i}` })), Array.from({ length: 7 }, (_, i) => ({ from: `n${i}`, to: `n${i + 1}`, rel: "drives" })));
+  check("diagram-8-fit", seq8.placed.length === 8 && seq8.placed.every((p) => p.x >= 0 && p.x + 176 <= seq8.width), `w=${seq8.width}`);
+  const branch = layoutDiagram(
+    [{ id: "a", label: "root" }, { id: "b", label: "left branch" }, { id: "c", label: "right branch" }, { id: "d", label: "join" }],
+    [{ from: "a", to: "b", rel: "feeds" }, { from: "a", to: "c", rel: "feeds" }, { from: "b", to: "d", rel: "joins" }, { from: "c", to: "d", rel: "joins" }]
+  );
+  const bN = branch.placed.find((p) => p.id === "b")!;
+  const cN = branch.placed.find((p) => p.id === "c")!;
+  check("diagram-branches", bN.depth === cN.depth && bN.y !== cN.y && branch.placed.find((p) => p.id === "d")!.depth === 2);
+  const longL = layoutDiagram([{ id: "x", label: "a very long part name that would overflow any fixed card width" }], []);
+  check("diagram-long-label", longL.placed.length === 1 && longL.width > 0);
+
+  // 23. Security: browser source carries no provider credential path.
+  const clientSrc = readFileSync("src/api/client.ts", "utf8");
+  check("client-no-key", !clientSrc.includes("VITE_META_API_KEY") && !clientSrc.includes("api.meta.ai") && clientSrc.includes("/api/chat"));
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

@@ -12,12 +12,16 @@ export interface CausalSpineLink {
   nextPart: string;
 }
 
+export type Representation = 'template-3d' | 'diagram-2d' | 'illustrative-3d' | 'illustrative-2d';
+
 export interface SceneData {
   title: string;
   beats: Beat[];
   sabotageBeat: string | { id: string } | number;
   causalSpine: CausalSpineLink[];
   dsl?: SceneDsl;
+  representation: Representation;
+  qualityScore?: number;
 }
 
 export interface Concept {
@@ -140,6 +144,18 @@ export interface DslConcept {
   medium: '3d' | '2d' | 'hybrid';
   mediumWhy: string;
   verification: 'solver' | 'sourced' | 'sketch';
+  /** Code-owned mechanism template id, when routing matched one.
+   * Only code sets this; model output claiming it is ignored. */
+  template?: string;
+  templateParams?: Record<string, number>;
+}
+
+/** Explicit relationship between two parts. Teaching order lives in
+ * beats; causality lives here and nowhere else. */
+export interface DslEdge {
+  from: string;
+  to: string;
+  rel: string;
 }
 
 export interface DslTheme {
@@ -163,6 +179,7 @@ export interface SceneDsl {
   nodes: DslNode[];
   joints: DslJoint[];
   groups: DslGroup[];
+  edges: DslEdge[];
   flows: unknown[];
   camera: DslCamera;
   beats: DslBeat[];
@@ -176,7 +193,7 @@ export interface MutationProbe {
 
 export interface SceneMutation {
   mutationId: string;
-  kind: 'edge_inversion' | 'phase_offset' | 'ratio_reversal' | 'node_deletion';
+  kind: 'edge_inversion' | 'node_deletion';
   beatId: string;
   mutatedBecauseOf: Record<string, string[]>;
   hiddenNodeIds: string[];

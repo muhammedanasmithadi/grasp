@@ -102,6 +102,9 @@ export const validateSceneDsl = (
     }
 
     const nodeIds = new Set<string>();
+    // Parent references: must exist, must not cycle. Checked after all
+    // ids are known (second pass below).
+    const parentOf = new Map<string, string>();
     for (const n of d.nodes as Record<string, unknown>[]) {
       if (typeof n.id !== "string" || !n.id) {
         return yield* fail("E_NODE_ID: every node needs a string id");
@@ -190,6 +193,50 @@ export const validateSceneDsl = (
       // Authored stages are the stager's job, not the model's: drop the
       // rejection here and let layoutScene strip slabs silently. A
       // dropped slab beats a failed world.
+    }
+
+    // Parent references resolve and never cycle.
+    for (const n of d.nodes as Record<string, unknown>[]) {
+      const parent = (n as { parent?: unknown }).parent;
+      if (parent === null || parent === undefined) continue;
+      if (typeof parent !== "string" || !nodeIds.has(parent)) {
+        return yield* fail(
+          `E_PARENT_REF: node "${String(n.id)}" parent "${String(parent)}" does not exist`
+        );
+      }
+      if (parent === n.id) {
+        return yield* fail(`E_PARENT_CYCLE: node "${String(n.id)}" is its own parent`);
+      }
+      parentOf.set(n.id as string, parent);
+    }
+    for (const start of parentOf.keys()) {
+      const seenChain = new Set<string>([start]);
+      let cur = parentOf.get(start);
+      while (cur) {
+        if (seenChain.has(cur)) {
+          return yield* fail(`E_PARENT_CYCLE: parent cycle through "${cur}"`);
+        }
+        seenChain.add(cur);
+        cur = parentOf.get(cur);
+      }
+    }
+
+    // Explicit causal edges: both ends resolve, relationship is named.
+    // Edges are the only source of drawn causality; teaching order in
+    // beats never invents them.
+    if (d.edges !== undefined && !Array.isArray(d.edges)) {
+      return yield* fail("E_EDGE_TYPE: edges must be an array");
+    }
+    for (const e of (Array.isArray(d.edges) ? d.edges : []) as Record<string, unknown>[]) {
+      if (typeof e.from !== "string" || !nodeIds.has(e.from)) {
+        return yield* fail(`E_EDGE_REF: edge from unknown node "${String(e.from)}"`);
+      }
+      if (typeof e.to !== "string" || !nodeIds.has(e.to)) {
+        return yield* fail(`E_EDGE_REF: edge to unknown node "${String(e.to)}"`);
+      }
+      if (typeof e.rel !== "string" || !e.rel) {
+        return yield* fail(`E_EDGE_REL: edge ${e.from}->${e.to} needs a relationship label`);
+      }
     }
 
     // Compound groups: 2+ primitives sharing one label. Members must
@@ -362,3 +409,40 @@ export const validateSceneDsl = (
 
     return data as SceneDsl;
   });
+
+/**
+ * Post-transform reference integrity. Run after layout, hero, or any
+ * other scene rewrite: every beat, edge, group, parent, and joint
+ * reference must still resolve. Returns an E_* message or null.
+ * Pure and synchronous so non-Effect callers (the adapter) can use it.
+ */
+export function validateReferences(dsl: SceneDsl): string | null {
+  const ids = new Set(dsl.nodes.map((n) => n.id));
+  for (const n of dsl.nodes) {
+    if (n.parent && !ids.has(n.parent)) {
+      return `E_PARENT_REF: node "${n.id}" parent "${n.parent}" missing after transform`;
+    }
+  }
+  for (const g of dsl.groups ?? []) {
+    for (const m of g.members) {
+      if (!ids.has(m)) return `E_GROUP_REF: group "${g.id}" member "${m}" missing after transform`;
+    }
+  }
+  for (const e of dsl.edges ?? []) {
+    if (!ids.has(e.from)) return `E_EDGE_REF: edge from "${e.from}" missing after transform`;
+    if (!ids.has(e.to)) return `E_EDGE_REF: edge to "${e.to}" missing after transform`;
+  }
+  for (const j of dsl.joints ?? []) {
+    if (!ids.has(j.a)) return `E_JOINT_REF: joint "${j.id}" a "${j.a}" missing after transform`;
+    if (!ids.has(j.b)) return `E_JOINT_REF: joint "${j.id}" b "${j.b}" missing after transform`;
+  }
+  for (const b of dsl.beats ?? []) {
+    for (const r of b.becauseOf ?? []) {
+      if (!ids.has(r)) return `E_ORPHAN_BEAT: beat "${b.id}" references "${r}" missing after transform`;
+    }
+    if (b.probe?.answer && !ids.has(b.probe.answer)) {
+      return `E_BEAT_PROBE: beat "${b.id}" answer "${b.probe.answer}" missing after transform`;
+    }
+  }
+  return null;
+}

@@ -55,6 +55,7 @@ const CALL_NAMES = new Set([
   "slider",
   "gear",
   "group",
+  "edge",
   "beat",
   "camera",
 ]);
@@ -244,6 +245,7 @@ interface Builder {
   nodes: Record<string, unknown>[];
   joints: Record<string, unknown>[];
   groups: Record<string, unknown>[];
+  edges: Record<string, unknown>[];
   beats: Record<string, unknown>[];
   camera?: Record<string, unknown>;
 }
@@ -252,28 +254,75 @@ const DEFAULT_TRANSFORM = { p: [0, 0, 0], r: [0, 0, 0], s: [1, 1, 1] };
 const DEFAULT_MATERIAL = { roughness: 0.5, metalness: 0.6, tint: "#E69F00" };
 
 const STAGE_LIMIT = 60;
-const PART_LIMIT = 16;
-
-// Radius-like first args on volumetric shapes fill the frame fast:
-// a radius-16 sphere is 32 units across. Cap those tighter.
-const RADIUS_CAP: Record<string, number> = {
-  sphere: 6,
-  cone: 6,
-  cylinder: 6,
-  capsule: 6,
-  torus: 8,
-  torusKnot: 8,
-  tetrahedron: 6,
-  octahedron: 6,
-  dodecahedron: 6,
-  icosahedron: 6,
-};
 
 // Clamp absurd extents into the stage so one giant slab cannot swallow the
 // scene. Defensive rendering, not validation: the model output still parses.
 function clampNum(v: unknown, fallback: number, limit = STAGE_LIMIT): number {
   const n = typeof v === "number" && Number.isFinite(v) ? v : fallback;
   return Math.max(-limit, Math.min(limit, n));
+}
+
+// Geometry normalization. Positional args are ambiguous, so they are
+// canonicalized per type at parse time: dimension slots are capped as
+// dimensions, segment slots are clamped as segment counts (8..64) and
+// never shrunk by dimension caps. Renderer, layout, and validator all
+// consume the canonical form:
+//   box [w,h,d] · sphere [r,wSeg,hSeg] · cylinder [rTop,rBottom,h,radialSeg]
+//   cone [r,h,radialSeg] · capsule [r,length,capSeg,radialSeg]
+//   torus/torusKnot [R,tube,radialSeg,tubularSeg] · circle [r,seg]
+//   ring [inner,outer,seg] · plane [w,h] · polyhedra [r,detail]
+const dim = (v: unknown, fallback: number, cap: number): number => {
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.abs(v) : fallback;
+  return Math.max(0.01, Math.min(cap, n));
+};
+const seg = (v: unknown, fallback: number): number => {
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(Math.abs(v)) : fallback;
+  return Math.max(3, Math.min(64, n));
+};
+
+export function normalizeArgs(fn: string, raw: unknown[] | undefined): number[] | undefined {
+  if (!raw) return undefined;
+  const a = (i: number): unknown => raw[i];
+  switch (fn) {
+    case "box":
+      return [dim(a(0), 1, 16), dim(a(1), 1, 16), dim(a(2), 1, 16)];
+    case "sphere":
+      return [dim(a(0), 0.5, 6), seg(a(1), 32), seg(a(2), 32)];
+    case "cylinder": {
+      // Builder shorthand: [r,h] or three-style [rTop,rBottom,h,...].
+      if (raw.length <= 2) {
+        const r = dim(a(0), 0.5, 6);
+        return [r, r, dim(a(1), 1, 16), 24];
+      }
+      return [dim(a(0), 0.5, 6), dim(a(1), 0.5, 6), dim(a(2), 1, 16), seg(a(3), 24)];
+    }
+    case "cone":
+      return [dim(a(0), 0.5, 6), dim(a(1), 1, 16), seg(a(2), 24)];
+    case "capsule":
+      return [dim(a(0), 0.3, 6), dim(a(1), 1, 16), seg(a(2), 8), seg(a(3), 16)];
+    case "torus":
+    case "torusKnot":
+      return [dim(a(0), 0.5, 8), dim(a(1), 0.2, 4), seg(a(2), 16), seg(a(3), 32)];
+    case "circle":
+      return [dim(a(0), 0.5, 16), seg(a(1), 32)];
+    case "ring":
+      return [dim(a(0), 0.3, 8), dim(a(1), 0.5, 8), seg(a(2), 32)];
+    case "plane":
+      return [dim(a(0), 1, 60), dim(a(1), 1, 60)];
+    case "tetrahedron":
+    case "octahedron":
+    case "dodecahedron":
+    case "icosahedron": {
+      const rawDetail = a(1);
+      const detail =
+        typeof rawDetail === "number" && Number.isFinite(rawDetail)
+          ? Math.max(0, Math.min(3, Math.round(Math.abs(rawDetail))))
+          : 0;
+      return [dim(a(0), 0.7, 6), detail];
+    }
+    default:
+      return raw.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : 1));
+  }
 }
 
 function sanitizeNode(
@@ -296,10 +345,7 @@ function sanitizeNode(
     a.geometry && typeof a.geometry === "object"
       ? (a.geometry as Record<string, unknown>)
       : undefined;
-  const argCap = RADIUS_CAP[fn] ?? PART_LIMIT;
-  const args = Array.isArray(g?.args)
-    ? (g.args as unknown[]).map((v) => clampNum(v, 1, argCap))
-    : undefined;
+  const args = normalizeArgs(fn, Array.isArray(g?.args) ? (g.args as unknown[]) : undefined);
   const radius =
     typeof g?.radius === "number" && Number.isFinite(g.radius)
       ? Math.max(0.01, Math.min(2, g.radius))
@@ -311,17 +357,10 @@ function sanitizeNode(
           : pt
       )
     : undefined;
-  // Cap effective extent: args * scale must fit the 16-unit stage
-  // or one slab fills the frame no matter how far the camera pulls back.
-  let finalArgs = args;
-  if (args) {
-    const aMax = Math.max(1, ...args.map((v) => Math.abs(Number(v) || 0)));
-    const sMax = Math.max(1, ...sClamped.map((v) => Math.abs(v)));
-    if (aMax * sMax > PART_LIMIT) {
-      const f = PART_LIMIT / (aMax * sMax);
-      finalArgs = args.map((v) => (Number(v) || 0) * f);
-    }
-  }
+  // Note: no extent re-scaling here. Layout applies one uniform factor
+  // per assembly, which preserves relative sizes; shrinking args here
+  // used to corrupt segment counts and part proportions alike.
+  const finalArgs = args;
   return {
     ...a,
     type: fn,
@@ -402,6 +441,9 @@ function execCall(
       case "group":
         builder.groups.push(a);
         break;
+      case "edge":
+        builder.edges.push(a);
+        break;
       case "camera":
         builder.camera = a;
         break;
@@ -453,7 +495,7 @@ export function parseSceneCode(
     if (stmts.length === 0) {
       return yield* fail("E_CODE_EMPTY: no statements found");
     }
-    const builder: Builder = { nodes: [], joints: [], groups: [], beats: [] };
+    const builder: Builder = { nodes: [], joints: [], groups: [], edges: [], beats: [] };
     yield* execStmts(builder, stmts, {});
     if (!builder.concept) {
       return yield* fail(
@@ -486,9 +528,15 @@ export function parseSceneCode(
       seen.add(key);
       return true;
     });
+    // The model can never grant itself verification or a template:
+    // both are code-owned. Strip them from model output unconditionally.
+    const rawConcept = (builder.concept ?? {}) as Record<string, unknown>;
+    const { template: _t, templateParams: _tp, ...conceptRest } = rawConcept;
+    void _t;
+    void _tp;
     const dsl = {
       dslVersion: "0.1",
-      concept: builder.concept,
+      concept: { ...conceptRest, verification: "sketch" },
       theme: builder.theme ?? {
         motif: "blueprint",
         palette: "okabe-ito",
@@ -497,6 +545,7 @@ export function parseSceneCode(
       nodes: builder.nodes,
       joints: builder.joints,
       groups: builder.groups,
+      edges: builder.edges,
       flows: [],
       camera: builder.camera ?? { axisOfAction: [0, 1, 0], shots: [] },
       beats,

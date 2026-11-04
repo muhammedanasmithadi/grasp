@@ -13,7 +13,10 @@ const TJ = "https://threejs.org/examples/models/gltf";
 // Whole-word concept match -> verified scan URL + display label.
 // Sources: Poly Haven props, Khronos sample assets (binary .glb where
 // available), three.js example figures. Every URL below is HTTP-verified.
-const HEROES: Array<{ words: string[]; url: string; label: string }> = [
+// notWords guards broad matches: a humanoid has no business in a
+// robot-ARM scene, and a person doesn't belong in personnel systems.
+// Machine and abstract contexts win over figure injection.
+const HEROES: Array<{ words: string[]; not?: string[]; url: string; label: string }> = [
   { words: ["drill"], url: `${PH}/Drill_01/Drill_01_1k.gltf`, label: "power drill" },
   { words: ["lantern"], url: `${PH}/Lantern_01/Lantern_01_1k.gltf`, label: "lantern" },
   { words: ["ukulele"], url: `${PH}/Ukulele_01/Ukulele_01_1k.gltf`, label: "ukulele" },
@@ -36,8 +39,8 @@ const HEROES: Array<{ words: string[]; url: string; label: string }> = [
   { words: ["parrot"], url: `${TJ}/Parrot.glb`, label: "parrot" },
   { words: ["flamingo"], url: `${TJ}/Flamingo.glb`, label: "flamingo" },
   { words: ["stork", "heron", "crane bird"], url: `${TJ}/Stork.glb`, label: "wading bird" },
-  { words: ["soldier", "person", "people", "human", "man", "woman", "troops", "guard"], url: `${TJ}/Soldier.glb`, label: "figure" },
-  { words: ["robot", "android", "cyborg"], url: `${TJ}/Xbot.glb`, label: "robot" },
+  { words: ["soldier", "person", "people", "human", "man", "woman", "troops", "guard"], not: ["arm", "machine", "factory", "conveyor", "motor", "engine", "personnel", "hr", "staff", "crowd"], url: `${TJ}/Soldier.glb`, label: "figure" },
+  { words: ["robot", "android", "cyborg"], not: ["arm", "vacuum", "lawnmower", "factory", "conveyor", "motor", "machine"], url: `${TJ}/Xbot.glb`, label: "robot" },
   { words: ["dragon"], url: `${KH}/DragonAttenuation/glTF-Binary/DragonAttenuation.glb`, label: "dragon" },
   { words: ["fish", "goldfish", "trout", "bass", "carp"], url: `${KH}/BarramundiFish/glTF-Binary/BarramundiFish.glb`, label: "fish" },
   { words: ["watch", "wristwatch", "timepiece"], url: `${KH}/ChronographWatch/glTF-Binary/ChronographWatch.glb`, label: "watch" },
@@ -55,14 +58,18 @@ export function injectHero(dsl: SceneDsl): SceneDsl {
   if (dsl.nodes.some((n) => n.type === "model")) return dsl;
   const q = ` ${dsl.concept.question.toLowerCase()} `;
   // Whole words, plural-tolerant ("horses" matches "horse").
-  const hit = HEROES.find((h) =>
-    h.words.some((w) => {
+  // notWords vetoes entries whose context disqualifies them.
+  const hit = HEROES.find((h) => {
+    const wordHit = h.words.some((w) => {
       const t = w.trim();
       return (
         q.includes(` ${t} `) || q.includes(` ${t}s `) || q.includes(` ${t}es `)
       );
-    })
-  );
+    });
+    if (!wordHit) return false;
+    if (h.not?.some((w) => q.includes(` ${w.trim()} `))) return false;
+    return true;
+  });
   if (!hit) return dsl;
   const hero: DslNode = {
     id: "hero-scan",

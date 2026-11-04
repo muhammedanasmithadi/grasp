@@ -115,6 +115,10 @@ const run = Effect.gen(function* () {
   check("hero-horse", withHorse.nodes.some((n) => n.id === "hero-scan" && n.label === "horse"), "horse injected");
   const fishDsl = { ...laid, concept: { ...laid.concept, question: "how a fish swims upstream" } };
   check("hero-fish", injectHero(fishDsl as SceneDsl).nodes.some((n) => n.label === "fish"));
+  const robotArm = { ...laid, concept: { ...laid.concept, question: "how a robot arm picks up boxes" } };
+  check("hero-skipped-machine", !injectHero(robotArm as SceneDsl).nodes.some((n) => n.id === "hero-scan"));
+  const robotWalks = { ...laid, concept: { ...laid.concept, question: "how a robot walks upstairs" } };
+  check("hero-robot", injectHero(robotWalks as SceneDsl).nodes.some((n) => n.label === "robot"));
   const noHero = injectHero(laid);
   check("hero-skipped", noHero.nodes.length === laid.nodes.length);
   const dupHero = injectHero(withHero);

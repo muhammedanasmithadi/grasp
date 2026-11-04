@@ -813,10 +813,10 @@ function LightRig({ center, radius }: { center: THREE.Vector3; radius: number })
   )
   return (
     <>
-      <hemisphereLight args={['#fffaf0', '#9a8f78', 0.4]} />
+      <hemisphereLight args={['#fffaf0', '#9a8f78', 0.5]} />
       <directionalLight
         position={keyPos}
-        intensity={1.9}
+        intensity={1.6}
         color="#ffcf9e"
         castShadow
         shadow-mapSize={[2048, 2048]}
@@ -1220,7 +1220,7 @@ export default function Scene3D({
           position={[focus.target.x + 4, focus.target.y + 7, focus.target.z + 5]}
           angle={0.5}
           penumbra={0.8}
-          intensity={0.38}
+          intensity={0.35}
           color="#ffe9c4"
         />
       )}

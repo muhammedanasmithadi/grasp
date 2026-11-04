@@ -1189,7 +1189,10 @@ export default function Scene3D({
         member = Math.max(member, e.hx, e.hy, e.hz)
       }
     }
-    return { target: c, radius: Math.min(Math.max(r, member * 2.6), radius) }
+    // Never equal establishing: a beat that frames the whole street is
+    // a beat with no subject. Cap at three-quarters of the scene radius
+    // so even all-group beats move closer than the opening wide.
+    return { target: c, radius: Math.min(Math.max(r, member * 2.6), radius * 0.75) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(focusNodeIds), center, radius])
 

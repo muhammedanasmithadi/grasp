@@ -114,7 +114,7 @@ const postChat = (
 // Research brief. Never fails the pipeline: if research fails we log
 // and build unbriefed (today's behavior) rather than failing the world.
 const researchBrief = (concept: string): Effect.Effect<string> =>
-  postChat(RESEARCH_SYSTEM, concept, 12000).pipe(
+  postChat(RESEARCH_SYSTEM, concept, 8000).pipe(
     Effect.catch((e: unknown) =>
       Effect.sync(() => {
         console.warn("[MetaModelAPI] research failed, building unbriefed:", e);
@@ -160,7 +160,7 @@ const singleAttempt = (
     if (onStage) {
       yield* Effect.sync(() => onStage("build"));
     }
-    const content = yield* postChat(BUILDER_SYSTEM + briefBlock, concept, 50000);
+    const content = yield* postChat(BUILDER_SYSTEM + briefBlock, concept, 24000);
 
     // Raw model output is dev-only diagnostics; never ship it to prod logs.
     if (import.meta.env.DEV) {
@@ -184,15 +184,14 @@ const singleAttempt = (
     return { scene, quality: quality?.score ?? 0 };
   });
 
-// Prompt variants for the quality loop. Each nudges a different weak
-// axis; temperature 0 makes each variant deterministic, so different
-// words are the only source of variety.
+// Prompt variants for the quality loop. Two attempts maximum: the raw
+// concept, then one staged nudge if the first scores low. Temperature
+// 0 makes each variant deterministic, so different words are the only
+// source of variety — and unbounded retries are just latency.
 const QUALITY_VARIANTS: Array<(concept: string) => string> = [
   (c) => c,
   (c) =>
-    `${c} (stage compactly: every part touching its neighbors in one tight row; texture every surface: brushed metal, wood grain, glass)`,
-  (c) =>
-    `${c} (compose each organ from 3 primitives in a named group; give the hero part glass transmission or an explicit texture map)`,
+    `${c} (stage compactly: every part touching its neighbors in one tight assembly; texture every surface: brushed metal, wood grain, glass; compose each organ from 3 primitives in a named group)`,
 ];
 
 export class MetaModelAPI {

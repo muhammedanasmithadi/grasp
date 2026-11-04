@@ -211,7 +211,35 @@ async function polyhavenBlobUrl(url: string): Promise<string> {
   return URL.createObjectURL(new Blob([patched], { type: 'model/gltf+json' }))
 }
 
-function ModelMesh({ url, scale }: { url: string; scale: [number, number, number] }) {
+/** A failed GLB must never blank the part: fall back to a labeled
+ * stand-in so the learner sees something is missing, honestly. */
+class ModelBoundary extends React.Component<
+  { label: string; children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true }
+  }
+  render(): React.ReactNode {
+    if (!this.state.failed) return this.props.children
+    return (
+      <group>
+        <mesh castShadow>
+          <boxGeometry args={[1.2, 1.2, 1.2]} />
+          <meshStandardMaterial color="#8a8272" roughness={0.8} metalness={0.1} />
+        </mesh>
+        <Html center zIndexRange={[15, 0]}>
+          <div style={{ ...LABEL_STYLE, color: '#a04000', border: '1px solid #a04000' }}>
+            {this.props.label} (model unavailable)
+          </div>
+        </Html>
+      </group>
+    )
+  }
+}
+
+function ModelMesh({ url, scale, label }: { url: string; scale: [number, number, number]; label: string }) {
   const polyhaven = url.includes('polyhaven.org')
   const [src, setSrc] = useState<string | null>(polyhaven ? null : url)
   useEffect(() => {
@@ -230,9 +258,11 @@ function ModelMesh({ url, scale }: { url: string; scale: [number, number, number
   }, [url, polyhaven])
   if (!src) return null
   return (
-    <Suspense fallback={null}>
-      <ModelInner src={src} scale={scale} />
-    </Suspense>
+    <ModelBoundary label={label}>
+      <Suspense fallback={null}>
+        <ModelInner src={src} scale={scale} />
+      </Suspense>
+    </ModelBoundary>
   )
 }
 
@@ -657,7 +687,7 @@ function faceSizeOf(node: DslNode): number {
       rotation={[node.transform.r[0], node.transform.r[1], node.transform.r[2]]}
     >
       {isModel ? (
-        <ModelMesh url={node.geometry!.url!} scale={node.transform.s} />
+        <ModelMesh url={node.geometry!.url!} scale={node.transform.s} label={node.label} />
       ) : isPoints ? (
         <group scale={node.transform.s}>
           <PointsCloud

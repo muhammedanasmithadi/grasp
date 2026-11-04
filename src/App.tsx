@@ -317,6 +317,15 @@ export default function App() {
   const [railTab, setRailTab] = useState<'spine' | 'read' | 'repair'>('spine')
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState(1)
+  const [history, setHistory] = useState<Array<{ query: string; ts: number; scene: SceneData }>>(() => {
+    try {
+      const raw = localStorage.getItem('grasp-history')
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed.slice(0, 5) : []
+    } catch {
+      return []
+    }
+  })
 
   const {
     screen,
@@ -400,16 +409,34 @@ export default function App() {
       ? ` · quality ${sceneData.qualityScore}/100`
       : ''
 
-  const handleAsk = useCallback(async () => {
-    if (!query.trim()) return
+  const saveHistory = useCallback((q: string, scene: SceneData) => {
+    setHistory((prev) => {
+      const next = [
+        { query: q, ts: Date.now(), scene },
+        ...prev.filter((h) => h.query !== q),
+      ].slice(0, 5)
+      try {
+        localStorage.setItem('grasp-history', JSON.stringify(next))
+      } catch {
+        // storage full/blocked: history is a convenience, never fatal
+      }
+      return next
+    })
+  }, [])
+
+  const handleAsk = useCallback(async (override?: string) => {
+    const text = (override ?? query).trim()
+    if (!text) return
+    if (override) dispatch({ type: 'SET_QUERY', payload: override })
     dispatch({ type: 'ASK_START' })
 
     try {
       const data = await Effect.runPromise(
-        metaModelAPI.generateScene(query.trim(), (s) =>
+        metaModelAPI.generateScene(text, (s) =>
           dispatch({ type: 'SET_STAGE', payload: s })
         )
       )
+      saveHistory(text, data)
       dispatch({ type: 'ASK_SUCCESS', payload: data })
     } catch (err) {
       const msg = (err as Error).message
@@ -419,10 +446,11 @@ export default function App() {
         try {
           const data2 = await Effect.runPromise(
             metaModelAPI.generateScene(
-              `${query.trim()} (present this as a flat 2D diagram: medium 2d, labeled cards joined by arrows, no 3D parts or joints)`,
+              `${text} (present this as a flat 2D diagram: medium 2d, labeled cards joined by arrows, no 3D parts or joints)`,
               (s) => dispatch({ type: 'SET_STAGE', payload: s })
             )
           )
+          saveHistory(text, data2)
           dispatch({ type: 'ASK_SUCCESS', payload: data2 })
           return
         } catch {
@@ -432,7 +460,26 @@ export default function App() {
       console.error('[Grasp] API failed:', msg)
       dispatch({ type: 'ASK_FAILURE', payload: msg })
     }
-  }, [query])
+  }, [query, saveHistory])
+
+  // Keyboard: arrows walk the beats, space toggles play (outside inputs).
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (screen !== 'scene') return
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return
+      if (e.key === 'ArrowRight') {
+        dispatch({ type: 'SET_BEAT', payload: Math.min(currentBeat + 1, beats.length) })
+      } else if (e.key === 'ArrowLeft') {
+        dispatch({ type: 'SET_BEAT', payload: Math.max(currentBeat - 1, 1) })
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        setPlaying((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [screen, currentBeat, beats.length])
 
   const nextBeat = useCallback(() => {
     if (currentBeat < lastBeatId) {
@@ -474,7 +521,7 @@ export default function App() {
           )}
         </header>
 
-        <div className="flex flex-1 min-h-0 overflow-hidden relative">
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden relative">
           <main className={`flex-1 min-w-0 bg-f3efe1 flex p-6 lg:p-8 overflow-y-auto ${screen === 'ask' ? 'items-center justify-center' : 'flex-col gap-4'}`}>
             {screen === 'ask' && (
               <div className="flex flex-col items-center justify-center h-full w-full max-w-xl text-slate">
@@ -529,7 +576,7 @@ export default function App() {
                     ) : (
                       <button
                         className="shrink-0 px-4 py-2 border-2 border-a04000 bg-white text-a04000 uppercase tracking-widest hover:bg-a04000 hover:text-white transition-all disabled:opacity-50"
-                        onClick={handleAsk}
+                        onClick={() => handleAsk()}
                         disabled={loading || !query.trim()}
                       >
                         Try again
@@ -538,6 +585,47 @@ export default function App() {
                   </div>
                 )}
                 <p className="text-sm text-slate leading-relaxed mt-4 italic text-center">Any mechanism, any concept. Agents reconstruct the causal chain; you learn by repairing what they break.</p>
+                <div className="w-full mb-4">
+                  <div className="text-[10px] font-bold text-slate tracking-widest mb-2 text-center">Try one</div>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {[
+                      'how a crankshaft turns a piston',
+                      'how a pendulum swings',
+                      'how a doorbell button rings the chime',
+                      'how a bicycle pump pushes air into a tire',
+                      'how the moon orbits the earth',
+                      'how inflation makes prices rise',
+                    ].map((ex) => (
+                      <button
+                        key={ex}
+                        className="px-3 py-2 border-2 border-c9ba9e bg-white text-[11px] font-bold text-2c2418 hover:border-b8860b transition-all disabled:opacity-50"
+                        disabled={loading}
+                        onClick={() => handleAsk(ex)}
+                      >
+                        {ex}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {history.length > 0 && (
+                  <div className="w-full mb-2">
+                    <div className="text-[10px] font-bold text-slate tracking-widest mb-2 text-center">Your recent worlds (saved locally)</div>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {history.map((h) => (
+                        <button
+                          key={h.ts}
+                          className="px-3 py-2 border-2 border-009e73 bg-white text-[11px] font-bold text-009e73 hover:bg-009e73 hover:text-white transition-all"
+                          onClick={() => {
+                            dispatch({ type: 'SET_QUERY', payload: h.query })
+                            dispatch({ type: 'ASK_SUCCESS', payload: h.scene })
+                          }}
+                        >
+                          {h.query}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <button
                   className="mt-6 px-5 py-3 border-2 border-c9ba9e bg-white text-[11px] font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all"
                   onClick={() => {
@@ -621,7 +709,7 @@ export default function App() {
             )}
           </main>
           {screen === 'scene' && (
-            <aside className="w-80 shrink-0 border-l-2 border-c9ba9e bg-f3efe1 flex flex-col z-20 min-h-0">
+            <aside className="w-full md:w-80 shrink-0 border-t-2 md:border-t-0 md:border-l-2 border-c9ba9e bg-f3efe1 flex flex-col z-20 min-h-0 max-md:max-h-[45vh]">
               <div className="shrink-0 flex border-b-2 border-c9ba9e" role="tablist" aria-label="Detail panels">
                 {(['spine', 'read', 'repair'] as const).map((tab) => (
                   <button

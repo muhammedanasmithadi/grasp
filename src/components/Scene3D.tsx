@@ -1175,24 +1175,28 @@ export default function Scene3D({
     const first = nodePositions.get(focusNodeIds[0])
     if (first) c.lerp(first, 0.6)
     let r = 1.2
-    for (const p of pts) r = Math.max(r, c.distanceTo(p) + 1.2)
-    // Swept-volume margin: joints animate parts ±0.45 and detail
-    // builders overhang node bounds, so the rest-pose frame always
-    // crops motion and trim. +20% and half a unit covers both without
-    // reverting to wide shots.
-    r = r * 1.2 + 0.5
-    let member = 0.6
+    // Member bounds, not just centers: a 7-unit hose whose center sits
+    // on target still needs its length inside the frame. Extents come
+    // from the same estimator as layout, so staging and framing agree.
     for (const id of mateIds) {
+      const p = nodePositions.get(id)
+      if (!p) continue
       const n = visibleNodes.find((v) => v.id === id)
-      if (n) {
-        const e = estimateExtents(n)
-        member = Math.max(member, e.hx, e.hy, e.hz)
-      }
+      const e = n
+        ? estimateExtents(n)
+        : { hx: 0.5, hy: 0.5, hz: 0.5 }
+      r = Math.max(
+        r,
+        c.distanceTo(p) + Math.max(e.hx, e.hy, e.hz)
+      )
     }
+    // Swept-volume margin on top: joints animate parts and detail
+    // builders overhang node bounds.
+    r = r * 1.2 + 0.5
     // Never equal establishing: a beat that frames the whole street is
     // a beat with no subject. Cap at three-quarters of the scene radius
     // so even all-group beats move closer than the opening wide.
-    return { target: c, radius: Math.min(Math.max(r, member * 2.6), radius * 0.75) }
+    return { target: c, radius: Math.min(r, radius * 0.75) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(focusNodeIds), center, radius])
 

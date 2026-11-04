@@ -219,6 +219,12 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
         const a = boxOf(solids[i]);
         const b = boxOf(solids[j]);
         if (Math.abs(a.y - b.y) >= a.hy + b.hy) continue; // stacked, not colliding
+        // Enclosure is not collision: a cabinet, dome, or tub fully
+        // containing another part in plan view is doing its job.
+        const contains = (o: typeof a, i: typeof b): boolean =>
+          Math.abs(i.x - o.x) + i.hx <= o.hx + 0.01 &&
+          Math.abs(i.z - o.z) + i.hz <= o.hz + 0.01;
+        if (contains(a, b) || contains(b, a)) continue;
         const dx = b.x - a.x;
         const dz = b.z - a.z;
         const penX = a.hx + b.hx - Math.abs(dx);

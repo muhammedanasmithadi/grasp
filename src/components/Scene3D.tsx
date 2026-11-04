@@ -813,9 +813,11 @@ function GroupLabels({
 function EdgeLines({
   edges,
   positions,
+  focusNodeIds = [],
 }: {
   edges: DslEdge[]
   positions: Map<string, THREE.Vector3>
+  focusNodeIds?: string[]
 }) {
   if (edges.length === 0) return null
   return (
@@ -825,9 +827,12 @@ function EdgeLines({
         const b = positions.get(e.to)
         if (!a || !b) return null
         const mid = a.clone().add(b).multiplyScalar(0.5)
-        // Short edges: the line itself reads clearly and stacked rel
-        // labels would only collide. Label only readable distances.
-        const showRel = a.distanceTo(b) > 1.4
+        // Labels only where the lesson is looking: every edge keeps
+        // its line, but stacked rel tags in a cluster unreadable.
+        // Short edges never label (the line reads on its own).
+        const showRel =
+          a.distanceTo(b) > 1.4 &&
+          (focusNodeIds.length === 0 || focusNodeIds.includes(e.from) || focusNodeIds.includes(e.to))
         return (
           <group key={i}>
             <Line points={[a, b]} color="#b8860b" linewidth={2} transparent opacity={0.65} />
@@ -1492,7 +1497,7 @@ export default function Scene3D({
               isFault={sabotageMode && i + 1 === sabotageBeatIndex}
             />
           ))}
-      <EdgeLines edges={edges} positions={nodePositions} />
+      <EdgeLines edges={edges} positions={nodePositions} focusNodeIds={focusNodeIds} />
       <GroupLabels
         groups={groups}
         positions={nodePositions}

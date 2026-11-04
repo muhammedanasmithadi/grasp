@@ -312,6 +312,26 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   check("depenetrated", planDist >= needDist, `dist=${planDist.toFixed(2)} need=${needDist.toFixed(2)}`);
   check("detail-blade", DetailFor({ node: dslNode("r", "box", "rotor blade assembly") as never }) !== null);
 
+  // 26. Enclosures survive de-penetration: a cabinet containing a
+  // drum in plan view is a container, not a collision.
+  const ENC = `
+concept({"question":"enclosure demo","medium":"3d","mediumWhy":"x","verification":"sketch"})
+theme({"motif":"m","palette":"okabe-ito","keyAzimuth":135})
+box({"id":"o1","parent":null,"transform":{"p":[0,1,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#E69F00"},"label":"inner drum","geometry":{"args":[2,2,2]}})
+box({"id":"o3","parent":null,"transform":{"p":[0.2,1.5,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#0072B2"},"label":"cabinet shell","geometry":{"args":[6,3,6]}})
+box({"id":"o4","parent":null,"transform":{"p":[8,1,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#009E73"},"label":"side block","geometry":{"args":[2,2,2]}})
+group({"id":"og2","label":"pair two","members":["o1","o4"]})
+hinge({"id":"oj2","a":"o1","b":"o4","anchor":[0,0,0],"axis":[0,0,1],"range":[0,90],"driver":{"kind":"time","rpm":20}})
+beat({"id":"s1","t":[0,6],"goal":"g1","becauseOf":["o1"],"probe":{"kind":"trace","prompt":"p","answer":"o1"},"narration":"n"})
+beat({"id":"s2","t":[6,12],"goal":"g2","becauseOf":["o3"],"probe":{"kind":"trace","prompt":"p","answer":"o3"},"narration":"n"})
+beat({"id":"s3","t":[12,18],"goal":"g3","becauseOf":["o4"],"probe":{"kind":"trace","prompt":"p","answer":"o4"},"narration":"n"})
+camera({"axisOfAction":[0,1,0],"shots":[]})
+`;
+  const encLaid = adaptDslToScene((yield* parseSceneCode(ENC)) as SceneDsl).dsl!;
+  const e1 = encLaid.nodes.find((n) => n.id === "o1")!;
+  const e3 = encLaid.nodes.find((n) => n.id === "o3")!;
+  check("enclosure-kept", Math.abs(e1.transform.p[0] - e3.transform.p[0]) < estimateExtents(e3).hx, `dx=${Math.abs(e1.transform.p[0] - e3.transform.p[0]).toFixed(2)} shellHx=${estimateExtents(e3).hx.toFixed(2)}`);
+
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");
 });

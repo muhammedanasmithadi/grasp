@@ -1250,14 +1250,11 @@ export default function Scene3D({
     if (hasNodes) {
       for (const n of subjects) {
         const p = n.transform.p
-        const s = n.transform.s
-        const sMax = Math.max(Math.abs(s[0]), Math.abs(s[1]), Math.abs(s[2]), 1)
-        let bound = 1.5 * sMax
-        const args = n.geometry?.args
-        if (Array.isArray(args) && args.length > 0) {
-          bound =
-            Math.max(...args.map((v) => Math.abs(Number(v) || 0)), 0.5) * sMax
-        }
+        // Bound from real extents, never raw args: segment counts
+        // (sphere 32, cylinder 24) are not sizes, and counting them
+        // once inflated every scene radius to ~32 units.
+        const ext = estimateExtents(n)
+        let bound = Math.max(ext.hx, ext.hy, ext.hz, 0.5)
         const path = n.geometry?.path as unknown
         if (Array.isArray(path) && path.length > 0) {
           let reach = 0

@@ -235,9 +235,10 @@ export class MetaModelAPI {
         const scene = adaptDslToScene(
           tpl === "pendulum" ? pendulumScene(concept) : crankSliderScene(concept)
         );
-        scene.qualityScore = scene.dsl ? scoreSceneDsl(scene.dsl).score : undefined;
+        // Templates are code-validated; the presentation scorer does
+        // not grade them and no score is shown for them.
         yield* Effect.sync(() =>
-          console.log(`[Grasp] routed to ${tpl} template, quality ${scene.qualityScore}/100`)
+          console.log(`[Grasp] routed to ${tpl} template`)
         );
         return scene;
       }

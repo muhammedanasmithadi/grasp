@@ -1057,7 +1057,7 @@ export default function Scene3D({
     }
     const isBackdrop = (n: (typeof visibleNodes)[number]): boolean => {
       const dims = scaledDims(n)
-      if (Math.max(dims[0], dims[2]) < 10) return false
+      if (Math.max(dims[0], dims[2]) < 8) return false
       if (n.type === 'plane' || n.type === 'circle') {
         return Math.abs(n.transform.r[0] + Math.PI / 2) < 0.15
       }

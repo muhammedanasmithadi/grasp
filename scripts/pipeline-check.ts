@@ -208,6 +208,12 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   const michelle = { ...laid, concept: { ...laid.concept, question: "how a woman throws a ball" } };
   check("hero-michelle", injectHero(michelle as SceneDsl).nodes.some((n) => n.label === "woman"));
 
+  // 17. Wonder-era heroes: fox, duck, truck resolve.
+  const foxDsl = { ...laid, concept: { ...laid.concept, question: "how a fox hunts mice" } };
+  check("hero-fox", injectHero(foxDsl as SceneDsl).nodes.some((n) => n.label === "fox"));
+  const truckDsl = { ...laid, concept: { ...laid.concept, question: "how a truck delivers milk" } };
+  check("hero-truck", injectHero(truckDsl as SceneDsl).nodes.some((n) => n.label === "truck"));
+
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");
 });

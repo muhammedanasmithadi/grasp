@@ -35,7 +35,7 @@ interface ApiEnvelope {
   }>;
 }
 
-const RESEARCH_SYSTEM = `You are a mechanism researcher. Given a concept, output STRICT JSON only, no prose, no markdown: {"parts":[{"name":"","substance":"","size":"","color":"","connectsTo":"","moves":""}],"environment":"","causalChain":[""],"facts":[""],"misconceptions":[""]}. List every physical part a learner must see with real-world substance, size, color, what it touches, and how it moves; the environment it sits in; the causal chain in order; checkable facts; and common misconceptions to avoid. Keep it under 1500 words.`;
+const RESEARCH_SYSTEM = `You are a mechanism researcher. Given a concept, output STRICT JSON only, no prose, no markdown: {"parts":[{"name":"","substance":"","size":"","color":"","connectsTo":"","moves":""}],"environment":"","causalChain":[""],"facts":[""],"misconceptions":[""]}. List every physical part a learner must see with real-world substance, size, color, what it touches, and how it moves; the environment it sits in; the causal chain in order; checkable facts; and common misconceptions to avoid. Keep it under 800 words.`;
 
 // One chat call returning raw text. Used for research (small) and
 // scene building (large) alike.
@@ -63,7 +63,7 @@ const postChat = (
             Authorization: `Bearer ${API_KEY}`,
           },
           body: JSON.stringify({
-            model: "muse-spark-1.3",
+            model: "muse-wonder-1.0",
             messages: [
               { role: "system", content: system },
               { role: "user", content: user },
@@ -127,7 +127,7 @@ const postChat = (
 // Research brief. Never fails the pipeline: if research fails we log
 // and build unbriefed (today's behavior) rather than failing the world.
 const researchBrief = (concept: string): Effect.Effect<string> =>
-  postChat(RESEARCH_SYSTEM, concept, 3000).pipe(
+  postChat(RESEARCH_SYSTEM, concept, 6000).pipe(
     Effect.catch((e: unknown) =>
       Effect.sync(() => {
         console.warn("[MetaModelAPI] research failed, building unbriefed:", e);

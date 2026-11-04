@@ -201,6 +201,8 @@ export interface AppState {
   hiddenNodeIds: string[];
   repairStatus: 'idle' | 'correct' | 'wrong';
   stage: 'research' | 'build' | null;
+  quizAnswered: string[];
+  teachbackDone: boolean;
 }
 
 export type AppAction =
@@ -213,6 +215,8 @@ export type AppAction =
   | { type: 'NEXT_BEAT' }
   | { type: 'SET_BEAT'; payload: number }
   | { type: 'FINISH' }
+  | { type: 'QUIZ_CORRECT'; payload: string }
+  | { type: 'TEACHBACK' }
   | { type: 'TOGGLE_SABOTAGE' }
   | { type: 'INTRODUCE_FAULT' }
   | { type: 'REPAIR_ATTEMPT'; payload: { nodeId: string } }

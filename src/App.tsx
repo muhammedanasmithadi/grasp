@@ -23,6 +23,8 @@ const initialState: AppState = {
   hiddenNodeIds: [],
   repairStatus: 'idle',
   stage: null,
+  quizAnswered: [],
+  teachbackDone: false,
 }
 
 function reducer(state: AppState, action: AppAction): AppState {
@@ -53,6 +55,8 @@ function reducer(state: AppState, action: AppAction): AppState {
         mutatedBecauseOf: {},
         hiddenNodeIds: [],
         repairStatus: 'idle',
+        quizAnswered: [],
+        teachbackDone: false,
       }
     case 'ASK_FAILURE':
       return {
@@ -70,6 +74,22 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, currentBeat: action.payload }
     case 'FINISH':
       return { ...state, showMastery: true }
+    case 'QUIZ_CORRECT': {
+      if (state.quizAnswered.includes(action.payload)) return state
+      return {
+        ...state,
+        quizAnswered: [...state.quizAnswered, action.payload],
+        masteryDelta: (state.masteryDelta ?? 0) + 5,
+      }
+    }
+    case 'TEACHBACK': {
+      if (state.teachbackDone) return state
+      return {
+        ...state,
+        teachbackDone: true,
+        masteryDelta: (state.masteryDelta ?? 0) + 20,
+      }
+    }
     case 'TOGGLE_SABOTAGE':
       return { ...state, sabotageMode: !state.sabotageMode }
     case 'INTRODUCE_FAULT': {
@@ -117,20 +137,95 @@ function reducer(state: AppState, action: AppAction): AppState {
   }
 }
 
-function BeatQuiz({ prompt, answer }: { prompt: string; answer: string }) {
-  const [open, setOpen] = useState(false)
-  if (!prompt) return null
+/** Per-beat check: pick the driver, don't just reveal it. Answering
+ * wrong keeps the choices open; answering right locks +5% mastery. */
+function BeatQuiz({
+  prompt,
+  answer,
+  options,
+  onCorrect,
+}: {
+  prompt: string
+  answer: string
+  options: string[]
+  onCorrect: () => void
+}) {
+  const [picked, setPicked] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  if (!prompt || options.length === 0) return null
+  const choices = options.includes(answer) ? options : [answer, ...options].slice(0, 3)
   return (
     <div className="mt-6 border-t-2 border-c9ba9e pt-4">
       <div className="text-[11px] font-bold text-slate uppercase tracking-widest mb-2">Check yourself</div>
       <div className="text-sm font-bold text-2c2418 mb-3">{prompt}</div>
-      {!open ? (
-        <button className="btn-text" onClick={() => setOpen(true)}>
-          Reveal the driver
-        </button>
-      ) : (
-        <div className="text-sm font-bold text-deepGreen uppercase tracking-wider">{answer}</div>
-      )}
+      <div className="space-y-2">
+        {choices.map((label) => {
+          const isRight = done && label === answer
+          const isWrongPick = !done && picked === label && label !== answer
+          return (
+            <button
+              key={label}
+              disabled={done}
+              className={`w-full text-left px-3 py-2 border-2 bg-white text-[11px] font-bold uppercase tracking-widest transition-all ${isRight ? 'border-009e73 text-009e73' : isWrongPick ? 'border-a04000 text-a04000' : 'border-c9ba9e text-2c2418 hover:border-b8860b disabled:opacity-60'}`}
+              onClick={() => {
+                setPicked(label)
+                if (label === answer) {
+                  setDone(true)
+                  onCorrect()
+                }
+              }}
+            >
+              {isRight ? '✓ ' : ''}{label}
+            </button>
+          )
+        })}
+      </div>
+      {done && <div className="mt-3 text-[11px] font-bold text-deepGreen uppercase tracking-widest">Correct — +5% mastery</div>}
+      {!done && picked && <div className="mt-3 text-[11px] font-bold text-a04000 uppercase tracking-widest">Not the driver — look at the highlighted parts, try again</div>}
+    </div>
+  )
+}
+
+/** Teach-back gate: finishing a world asks one question back. The
+ * learner names what starts the whole chain; only then is the world
+ * complete. Correct answers add +20% mastery, once. */
+function FinalCheck({
+  parts,
+  onCorrect,
+}: {
+  parts: string[]
+  onCorrect: () => void
+}) {
+  const answer = parts[0]
+  const [picked, setPicked] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  if (!answer || parts.length < 2) return null
+  const choices = [...parts].sort((a, b) => (a.length + parts.indexOf(a)) - (b.length + parts.indexOf(b)))
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <span className="text-[11px] font-bold text-slate uppercase tracking-widest">Teach-back: what starts the whole chain?</span>
+      {choices.map((label) => {
+        const isRight = done && label === answer
+        const isWrongPick = !done && picked === label && label !== answer
+        return (
+          <button
+            key={label}
+            disabled={done}
+            className={`px-3 py-2 border-2 text-[11px] font-bold uppercase tracking-widest transition-all ${isRight ? 'border-009e73 bg-009e73 text-white' : isWrongPick ? 'border-a04000 bg-fdeee2 text-a04000' : 'border-c9ba9e bg-white text-2c2418 hover:border-b8860b disabled:opacity-60'}`}
+            onClick={() => {
+              setPicked(label)
+              if (label === answer) {
+                setDone(true)
+                onCorrect()
+              }
+            }}
+          >
+            {isRight ? '✓ ' : ''}{label}
+          </button>
+        )
+      })}
+      {done && <span className="text-[11px] font-bold text-deepGreen uppercase tracking-widest">Teach-back complete +20%</span>}
+      {!done && picked && <span className="text-[11px] font-bold text-a04000 uppercase tracking-widest">That comes later — what comes first?</span>}
     </div>
   )
 }
@@ -464,7 +559,7 @@ export default function App() {
                       playing
                       medium={medium}
                       backdrop={sceneData?.dsl?.theme?.backdrop}
-                      focusNodeIds={[...activeNodeIds, ...faultNodeIds]}
+                      focusNodeIds={[...activeNodeIds, ...shownFaultNodeIds]}
                       sceneKey={concept?.id ?? 'scene'}
                     />
                   )}
@@ -548,6 +643,22 @@ export default function App() {
                     key={currentBeat}
                     prompt={dslBeats?.[currentBeat - 1]?.probe.prompt ?? ''}
                     answer={dslNodes.find((n) => n.id === dslBeats?.[currentBeat - 1]?.probe.answer)?.label ?? dslBeats?.[currentBeat - 1]?.probe.answer ?? ''}
+                    options={(() => {
+                      const ansId = dslBeats?.[currentBeat - 1]?.probe.answer
+                      const ansLabel = dslNodes.find((n) => n.id === ansId)?.label ?? ansId ?? ''
+                      const seen = new Set([ansLabel.toLowerCase()])
+                      const opts: string[] = []
+                      for (const n of dslNodes) {
+                        if (n.id === ansId) continue
+                        const k = n.label.toLowerCase()
+                        if (seen.has(k)) continue
+                        seen.add(k)
+                        opts.push(n.label)
+                        if (opts.length >= 2) break
+                      }
+                      return opts
+                    })()}
+                    onCorrect={() => dispatch({ type: 'QUIZ_CORRECT', payload: String(dslBeats?.[currentBeat - 1]?.id ?? currentBeat) })}
                   />
                 </div>
               )}
@@ -621,8 +732,11 @@ export default function App() {
                   {currentBeat === lastBeatId ? 'Finish' : 'Next'}
                 </button>
               ) : (
-                <div className="ml-auto shrink-0 flex items-center gap-3">
-                  <span className="text-[11px] font-bold text-deepGreen uppercase tracking-widest">Teach-back complete +{masteryDelta ?? 0}%</span>
+                <div className="ml-auto shrink-0 flex items-center gap-3 flex-wrap">
+                  <FinalCheck
+                    parts={beats.map((b) => b.part)}
+                    onCorrect={() => dispatch({ type: 'TEACHBACK' })}
+                  />
                   <button className="btn-text" onClick={() => dispatch({ type: 'RESET' })}>
                     Try another concept
                   </button>

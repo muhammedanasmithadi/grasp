@@ -176,9 +176,10 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       geometry = { ...n.geometry, radius: r };
     }
     if (n.type === "tube" && Array.isArray(n.geometry?.path)) {
+      const base = (geometry ?? n.geometry)!;
       geometry = {
-        ...n.geometry,
-        path: (n.geometry.path as [number, number, number][]).map((pt) => tx(pt)),
+        ...base,
+        path: (base.path as [number, number, number][]).map((pt) => tx(pt)),
       };
     }
     const s = n.transform.s;

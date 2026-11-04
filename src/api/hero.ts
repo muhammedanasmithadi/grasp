@@ -39,6 +39,7 @@ const HEROES: Array<{ words: string[]; not?: string[]; url: string; label: strin
   { words: ["parrot"], url: `${TJ}/Parrot.glb`, label: "parrot" },
   { words: ["flamingo"], url: `${TJ}/Flamingo.glb`, label: "flamingo" },
   { words: ["stork", "heron", "crane bird"], url: `${TJ}/Stork.glb`, label: "wading bird" },
+  { words: ["woman", "female", "girl", "lady"], not: ["arm", "machine", "factory", "conveyor", "motor", "engine"], url: `${TJ}/Michelle.glb`, label: "woman" },
   { words: ["soldier", "person", "people", "human", "man", "woman", "troops", "guard"], not: ["arm", "machine", "factory", "conveyor", "motor", "engine", "personnel", "hr", "staff", "crowd"], url: `${TJ}/Soldier.glb`, label: "figure" },
   { words: ["robot", "android", "cyborg"], not: ["arm", "vacuum", "lawnmower", "factory", "conveyor", "motor", "machine"], url: `${TJ}/Xbot.glb`, label: "robot" },
   { words: ["dragon"], url: `${KH}/DragonAttenuation/glTF-Binary/DragonAttenuation.glb`, label: "dragon" },

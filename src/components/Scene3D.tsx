@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useMemo, useState, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Line, Html, useGLTF, Environment, ContactShadows, SoftShadows, Lightformer } from '@react-three/drei'
-import { EffectComposer, Bloom, Vignette, HueSaturation, BrightnessContrast, N8AO } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, Vignette, HueSaturation, BrightnessContrast, N8AO, Noise } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
@@ -25,7 +25,7 @@ const LABEL_STYLE: React.CSSProperties = {
 import { getGrainTexture, getMapTexture, getLinearTexture, getStageTexture } from './procedural'
 import { estimateExtents } from '../api/layout'
 import { DetailFor } from './details'
-import { substanceUrl } from '../api/substance'
+import { substanceUrl, normalForAlbedo } from '../api/substance'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
@@ -282,20 +282,69 @@ function useTubeGeometry(path: [number, number, number][] | undefined, radius: n
   }, [path ? JSON.stringify(path) : '', radius, JSON.stringify(origin)])
 }
 
-function PointsCloud({ count, size, color }: { count: number; size: number; color: string }) {
-  const positions = useMemo(() => {
-    const arr = new Float32Array(count * 3)
+/** Particle behavior from words. Smoke rises, droplets fall, dust
+ * drifts: the motion carries the matter, so frozen mist is impossible. */
+export function particleBehavior(label: string): 'rise' | 'fall' | 'drift' {
+  const hay = label.toLowerCase()
+  if (/(smoke|steam|mist|cloud|vapor|vapour|fog|plume|breath|haze|fume)/.test(hay)) return 'rise'
+  if (/(drop|droplet|drip|rain|spark|ember|ash|snow|hail|shower|leak)/.test(hay)) return 'fall'
+  return 'drift'
+}
+
+function PointsCloud({ count, size, color, label }: { count: number; size: number; color: string; label: string }) {
+  const geoRef = useRef<THREE.BufferGeometry>(null!)
+  const mode = particleBehavior(label)
+  const seed = useMemo(() => {
+    const pos = new Float32Array(count * 3)
+    const spd = new Float32Array(count)
+    const phz = new Float32Array(count)
     for (let i = 0; i < count; i++) {
-      arr[i * 3] = (Math.random() - 0.5) * 2
-      arr[i * 3 + 1] = (Math.random() - 0.5) * 2
-      arr[i * 3 + 2] = (Math.random() - 0.5) * 2
+      pos[i * 3] = (Math.random() - 0.5) * 2
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 2
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 2
+      spd[i] = 0.5 + Math.random() * 0.9
+      phz[i] = Math.random() * Math.PI * 2
     }
-    return arr
+    return { pos, spd, phz }
   }, [count])
+  useFrame((state, delta) => {
+    const geo = geoRef.current
+    if (!geo) return
+    const dt = Math.min(delta, 0.05)
+    const arr = geo.attributes.position as THREE.BufferAttribute
+    const t = state.clock.elapsedTime
+    for (let i = 0; i < count; i++) {
+      let x = seed.pos[i * 3]
+      let y = seed.pos[i * 3 + 1]
+      let z = seed.pos[i * 3 + 2]
+      if (mode === 'rise') {
+        y += dt * 0.55 * seed.spd[i]
+        x += Math.sin(t * 1.3 + seed.phz[i]) * dt * 0.25
+        if (y > 1.2) {
+          y = -1.2
+          x = (Math.random() - 0.5) * 2
+          z = (Math.random() - 0.5) * 2
+        }
+      } else if (mode === 'fall') {
+        y -= dt * (0.9 + seed.spd[i] * 0.9)
+        x += Math.sin(t * 2.1 + seed.phz[i]) * dt * 0.08
+        if (y < -1.2) {
+          y = 1.2
+          x = (Math.random() - 0.5) * 2
+          z = (Math.random() - 0.5) * 2
+        }
+      } else {
+        x = seed.pos[i * 3] + Math.sin(t * 0.4 * seed.spd[i] + seed.phz[i]) * 0.25
+        y = seed.pos[i * 3 + 1] + Math.cos(t * 0.3 * seed.spd[i] + seed.phz[i]) * 0.25
+      }
+      arr.setXYZ(i, x, y, z)
+    }
+    arr.needsUpdate = true
+  })
   return (
     <points>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      <bufferGeometry ref={geoRef}>
+        <bufferAttribute attach="attributes-position" args={[seed.pos, 3]} />
       </bufferGeometry>
       <pointsMaterial size={size} color={color} sizeAttenuation transparent opacity={0.9} />
     </points>
@@ -474,13 +523,11 @@ function faceSizeOf(node: DslNode): number {
   const glowI = active || isFault ? 0.05 + 0.3 * (1 - glowLum) : 0
   const autoMap = node.material.map ?? substanceTexture(node)
   const mapTex = autoMap ? getMapTexture(autoMap) : undefined
-  // Normal detail rides along: polyhaven albedo URLs have a matching
-  // normal map under the same slug, loaded linear (never sRGB).
+  // Normal detail rides along: the albedo's matching 1k normal map,
+  // loaded linear (never sRGB).
   const autoNormal =
     node.material.normalMap ??
-    (autoMap && autoMap.includes('_diff_1k.jpg')
-      ? autoMap.replace('_diff_1k.jpg', '_nor_dx_1k.jpg')
-      : null)
+    (autoMap ? normalForAlbedo(autoMap) : null)
   const normalTex = autoNormal ? getLinearTexture(autoNormal) : undefined
   const isTube = node.type === 'tube'
   const tubeGeo = useTubeGeometry(
@@ -504,6 +551,7 @@ function faceSizeOf(node: DslNode): number {
             count={Math.min(node.geometry?.count ?? 300, 5000)}
             size={node.geometry?.size ?? 0.08}
             color={base}
+            label={`${node.label} ${node.id}`}
           />
         </group>
       ) : isTube && tubeGeo ? (
@@ -1258,6 +1306,7 @@ export default function Scene3D({
       {!isFlat && (
         <EffectComposer multisampling={4}>
           <N8AO halfRes aoRadius={2} intensity={1.2} quality="performance" />
+          <Noise premultiply />
           <Bloom mipmapBlur intensity={0.45} luminanceThreshold={1.0} luminanceSmoothing={0.25} />
           <HueSaturation saturation={0.14} />
           <BrightnessContrast contrast={0.08} />

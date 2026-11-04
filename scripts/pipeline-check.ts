@@ -8,6 +8,8 @@ import { createMutation } from "../src/api/mutations.ts";
 import { DetailFor } from "../src/components/details.tsx";
 import { injectHero } from "../src/api/hero.ts";
 import { scoreSceneDsl, ACCEPT_SCORE } from "../src/api/quality.ts";
+import { particleBehavior } from "../src/components/Scene3D.tsx";
+import { normalForAlbedo } from "../src/api/substance.ts";
 import { substanceTexture, liftBlackTint, brightFaceTint, tubePointsRelative } from "../src/components/Scene3D.tsx";
 import type { SceneDsl } from "../src/types.ts";
 
@@ -195,6 +197,17 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   const thinLaid = adaptDslToScene(thin).dsl!;
   const thinScore = scoreSceneDsl(thinLaid);
   check("quality-thin-fails", thinScore.score < ACCEPT_SCORE && thinScore.score < goodScore.score, `${thinScore.score}/100`);
+  // 14. Physics words route particles: smoke rises, droplets fall.
+  check("particle-rise", particleBehavior("steam cloud") === "rise");
+  check("particle-fall", particleBehavior("water droplets") === "fall");
+  check("particle-drift", particleBehavior("dust motes") === "drift");
+  // 15. Relief stays 1k while albedo goes 2k.
+  check("normal-1k", (normalForAlbedo("https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/metal_plate/metal_plate_diff_2k.jpg") ?? "").includes("1k/metal_plate/metal_plate_nor_dx_1k.jpg"));
+  check("normal-plain", normalForAlbedo("https://cdn.jsdelivr.net/x.jpg") === null);
+  // 16. Second figure: women resolve to Michelle, not the soldier.
+  const michelle = { ...laid, concept: { ...laid.concept, question: "how a woman throws a ball" } };
+  check("hero-michelle", injectHero(michelle as SceneDsl).nodes.some((n) => n.label === "woman"));
+
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");
 });

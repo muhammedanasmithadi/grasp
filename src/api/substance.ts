@@ -40,17 +40,26 @@ export function matchesSubstance(label: string, id: string, type: string): boole
   );
 }
 
-/** Albedo URL for a part, or null when its words name nothing. */
+/** Albedo URL for a part, or null when its words name nothing.
+ * Poly Haven albedos load at 2k; relief always rides the matching 1k
+ * normal map (verified pattern), so detail never depends on a 2k
+ * normal existing. */
 export function substanceUrl(label: string, id: string, type: string): string | null {
   if (type === 'tube' || type === 'points' || type === 'model') return null;
   const hay = `${label} ${id}`.toLowerCase();
   for (const { words, slug } of SUBSTANCE_MAPS) {
     if (words.some((w) => hay.includes(w))) {
-      return `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/${slug}/${slug}_diff_1k.jpg`;
+      return `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/${slug}/${slug}_diff_2k.jpg`;
     }
   }
   for (const { words, url } of REMOTE_MAPS) {
     if (words.some((w) => hay.includes(w))) return url;
   }
   return null;
+}
+
+/** Relief companion for an albedo URL: same asset, 1k normal map. */
+export function normalForAlbedo(albedo: string): string | null {
+  if (!albedo.includes('_diff_')) return null;
+  return albedo.replace(/\/\dk\//, '/1k/').replace(/_diff_\dk\.jpg$/, '_nor_dx_1k.jpg');
 }

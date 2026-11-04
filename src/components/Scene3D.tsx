@@ -872,17 +872,18 @@ function groundSafeTint(tint: string, isGround: boolean): string {
   return mixToward(r, g, b, 0.35, [0.72, 0.67, 0.55])
 }
 
-/** Large bright subject faces (glass trays, white housings) blow out
- * under the key + spot stack. A gentle pull toward warm paper keeps
- * them bright but holds detail. Small parts are untouched. */
+/** Large bright subject faces (glass trays, white housings, paper
+ * stacks) blow out under the key + spot stack. A gentle pull toward
+ * warm paper keeps them bright but holds detail. Small parts are
+ * untouched. */
 export function brightFaceTint(tint: string, face: number): string {
   const hex = expandHex(tint)
-  if (!hex || face < 4) return tint
+  if (!hex || face < 2.5) return tint
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
   const b = parseInt(hex.slice(5, 7), 16) / 255
   const lum = 0.299 * r + 0.587 * g + 0.114 * b
-  if (lum <= 0.92) return tint
+  if (lum <= 0.9) return tint
   return mixToward(r, g, b, 0.6, [0.85, 0.79, 0.66])
 }
 

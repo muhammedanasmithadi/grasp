@@ -136,7 +136,8 @@ const run = Effect.gen(function* () {
 
   // 9. Large bright faces get a gentle pull; small ones untouched.
   check("bright-pulled", brightFaceTint("#ffffff", 6) !== "#ffffff", brightFaceTint("#ffffff", 6));
-  check("small-kept", brightFaceTint("#ffffff", 3) === "#ffffff");
+  check("small-kept", brightFaceTint("#ffffff", 2) === "#ffffff");
+  check("paper-pulled", brightFaceTint("#ffffff", 3) !== "#ffffff", brightFaceTint("#ffffff", 3));
   check("gray-kept2", brightFaceTint("#8a8272", 6) === "#8a8272");
 
   // 10. Tube paths relativize to the node origin (no double transform).

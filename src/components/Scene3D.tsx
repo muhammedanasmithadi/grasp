@@ -1173,7 +1173,7 @@ export default function Scene3D({
     // otherwise frame identically. The assembly stays in frame; the
     // emphasis moves with the lesson.
     const first = nodePositions.get(focusNodeIds[0])
-    if (first) c.lerp(first, 0.45)
+    if (first) c.lerp(first, 0.6)
     let r = 1.2
     for (const p of pts) r = Math.max(r, c.distanceTo(p) + 1.2)
     // Swept-volume margin: joints animate parts ±0.45 and detail
@@ -1220,7 +1220,7 @@ export default function Scene3D({
           position={[focus.target.x + 4, focus.target.y + 7, focus.target.z + 5]}
           angle={0.5}
           penumbra={0.8}
-          intensity={0.5}
+          intensity={0.38}
           color="#ffe9c4"
         />
       )}

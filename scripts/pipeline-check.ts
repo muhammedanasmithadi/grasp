@@ -23,7 +23,7 @@ box({"id":"pin2","parent":null,"transform":{"p":[50,40,25],"r":[0,0,0],"s":[1,1,
 box({"id":"housing","parent":null,"transform":{"p":[-15,-30,-20],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.6,"metalness":0.3,"tint":"#8a8272"},"label":"lock housing","geometry":{"args":[8,8,8]}})
 cylinder({"id":"mast","parent":null,"transform":{"p":[70,0,-40],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#8a8272"},"label":"tall mast","geometry":{"args":[0.3,0.3,8]}})
 capsule({"id":"spring","parent":null,"transform":{"p":[60,-40,30],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.8,"tint":"#E69F00"},"label":"tiny spring","geometry":{"args":[0.05,0.1]}})
-tube({"id":"beam","parent":null,"transform":{"p":[0,3,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.2,"tint":"#E69F00","emissive":"#E69F00"},"label":"light beam","geometry":{"path":[[0,3,0],[4,4,1],[7,3,2]],"radius":1.2}})
+tube({"id":"beam","parent":null,"transform":{"p":[0,3,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.4,"metalness":0.2,"tint":"#E69F00","emissive":"#E69F00"},"label":"light beam","geometry":{"path":[[0,3,0],[3,3.5,1],[5,3,2]],"radius":1.2}})
 group({"id":"grp-door","label":"door assembly","members":["door","bolt"]})
 group({"id":"grp-key","label":"key assembly","members":["shaft","bow"]})
 group({"id":"grp-pins","label":"pin set","members":["pin1","pin2"]})
@@ -68,7 +68,7 @@ const run = Effect.gen(function* () {
   check("layout-stable", same);
   const tube = laid.nodes.find((n) => n.id === "beam")!;
   const reach = Math.max(...(tube.geometry!.path as number[][]).map((p) => Math.abs(p[0] - tube.transform.p[0])));
-  check("tube-clamped", reach <= 5.01, `reach=${reach.toFixed(2)}`);
+  check("tube-clamped", reach <= 3.61, `reach=${reach.toFixed(2)}`);
   const beamR = laid.nodes.find((n) => n.id === "beam")!.geometry!.radius as number;
   check("tube-radius-capped", beamR <= 0.41, `r=${beamR}`);
   check("beats-mapped", scene.beats.length === 4 && scene.causalSpine.length === 4);

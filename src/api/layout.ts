@@ -104,7 +104,7 @@ export function estimateExtents(n: DslNode): Extents {
         // Reach is clamped at placement (see layoutScene), so estimate
         // with the same cap: a sprawling hose must not reserve the row.
         const r = num(n.geometry?.radius) || 0.15;
-        return { hx: Math.min(rx + r, 5.15) * sx, hy: Math.min(ry + r, 5.15) * sy, hz: Math.min(rx + r, 5.15) * sx };
+        return { hx: Math.min(rx + r, 3.65) * sx, hy: Math.min(ry + r, 3.65) * sy, hz: Math.min(rx + r, 3.65) * sx };
       }
       return { hx: 0.5 * sx, hy: 0.5 * sy, hz: 0.5 * sx };
     }
@@ -281,7 +281,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       }
       if (n.type === "tube" && Array.isArray(n.geometry?.path)) {
         const clamp = (v: number, c: number): number =>
-          c + Math.max(-5, Math.min(5, v - c));
+          c + Math.max(-3.5, Math.min(3.5, v - c));
         const base = (geometry ?? n.geometry)!;
         geometry = {
           ...base,
@@ -319,7 +319,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       // Translate with the node, but clamp reach: one sprawling hose
       // must never own the frame or the ground. Shape is preserved,
       // sprawl is not.
-      const MAX_REACH = 5;
+      const MAX_REACH = 3.5;
       const clamp = (v: number, c: number): number =>
         c + Math.max(-MAX_REACH, Math.min(MAX_REACH, v - c));
       geometry = {

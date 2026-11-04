@@ -167,9 +167,9 @@ export const validateSceneDsl = (
             Math.abs(pt[2] - p0[2])
           );
         }
-        if (reach > 9) {
+        if (reach > 6) {
           return yield* fail(
-            `E_TUBE_SPRAWL: node "${n.id}" path reaches ${reach.toFixed(1)} units from its origin; keep tube paths within 9 units`
+            `E_TUBE_SPRAWL: node "${n.id}" path reaches ${reach.toFixed(1)} units from its origin; keep tube paths within 6 units`
           );
         }
       }

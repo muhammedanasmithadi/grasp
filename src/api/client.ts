@@ -127,7 +127,7 @@ const postChat = (
 // Research brief. Never fails the pipeline: if research fails we log
 // and build unbriefed (today's behavior) rather than failing the world.
 const researchBrief = (concept: string): Effect.Effect<string> =>
-  postChat(RESEARCH_SYSTEM, concept, 6000).pipe(
+  postChat(RESEARCH_SYSTEM, concept, 12000).pipe(
     Effect.catch((e: unknown) =>
       Effect.sync(() => {
         console.warn("[MetaModelAPI] research failed, building unbriefed:", e);

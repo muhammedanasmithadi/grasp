@@ -170,6 +170,29 @@ export function DetailFor({ node }: { node: DslNode }): React.ReactElement | nul
       </group>
     )
   }
+  if (has('blade', 'rotor', 'propeller', 'fan', 'windmill')) {
+    // A bare plank is not a rotor. Hub plus pitched blades reads as one
+    // at any distance. Blades lie in the horizontal plane (mast rotors,
+    // ceiling fans); detail builders cannot know the authored axis, so
+    // this covers the common case and the base primitive still shows.
+    const blades = 3
+    return (
+      <group>
+        <P color={dark} metalness={metal} geo={<cylinderGeometry args={[hx * 0.22, hx * 0.22, hy * 0.7, 14]} />} />
+        {Array.from({ length: blades }).map((_, i) => {
+          const a = (i / blades) * Math.PI * 2
+          return (
+            <group key={i} rotation={[0, a, 0]}>
+              <mesh castShadow position={[hx * 0.55, 0, 0]} rotation={[0.35, 0, 0.12]}>
+                <boxGeometry args={[hx * 0.95, Math.max(hy * 0.08, 0.03), hx * 0.3]} />
+                <meshStandardMaterial color={tint} metalness={metal} roughness={0.45} />
+              </mesh>
+            </group>
+          )
+        })}
+      </group>
+    )
+  }
   if (has('grille', 'grill', 'vent', 'speaker', 'radiator')) {
     return (
       <group>

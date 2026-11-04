@@ -290,6 +290,28 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   check("pendulum-interactive", verifyScene(pend).badge === "interactive" && adaptDslToScene(pend).representation === "template-3d");
   check("pendulum-routing", matchTemplate("how a pendulum swings") === "pendulum" && matchTemplate("how a pendulum clock") === null || matchTemplate("pendulum") === "pendulum");
 
+  // 25. De-penetration: overlapping solids separate in plan view.
+  const OVER = `
+concept({"question":"overlap demo","medium":"3d","mediumWhy":"x","verification":"sketch"})
+theme({"motif":"m","palette":"okabe-ito","keyAzimuth":135})
+box({"id":"o1","parent":null,"transform":{"p":[0,1,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#E69F00"},"label":"block one","geometry":{"args":[2,2,2]}})
+box({"id":"o2","parent":null,"transform":{"p":[0.5,1,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#0072B2"},"label":"block two","geometry":{"args":[2,2,2]}})
+box({"id":"o3","parent":null,"transform":{"p":[4,1,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#009E73"},"label":"block three","geometry":{"args":[2,2,2]}})
+group({"id":"og","label":"pair","members":["o1","o2"]})
+hinge({"id":"oj","a":"o1","b":"o2","anchor":[0,0,0],"axis":[0,0,1],"range":[0,90],"driver":{"kind":"time","rpm":20}})
+beat({"id":"s1","t":[0,6],"goal":"g1","becauseOf":["o1"],"probe":{"kind":"trace","prompt":"p","answer":"o1"},"narration":"n"})
+beat({"id":"s2","t":[6,12],"goal":"g2","becauseOf":["o2"],"probe":{"kind":"trace","prompt":"p","answer":"o2"},"narration":"n"})
+beat({"id":"s3","t":[12,18],"goal":"g3","becauseOf":["o3"],"probe":{"kind":"trace","prompt":"p","answer":"o3"},"narration":"n"})
+camera({"axisOfAction":[0,1,0],"shots":[]})
+`;
+  const overLaid = adaptDslToScene((yield* parseSceneCode(OVER)) as SceneDsl).dsl!;
+  const o1 = overLaid.nodes.find((n) => n.id === "o1")!;
+  const o2 = overLaid.nodes.find((n) => n.id === "o2")!;
+  const planDist = Math.hypot(o2.transform.p[0] - o1.transform.p[0], o2.transform.p[2] - o1.transform.p[2]);
+  const needDist = estimateExtents(o1).hx + estimateExtents(o2).hx - 0.05;
+  check("depenetrated", planDist >= needDist, `dist=${planDist.toFixed(2)} need=${needDist.toFixed(2)}`);
+  check("detail-blade", DetailFor({ node: dslNode("r", "box", "rotor blade assembly") as never }) !== null);
+
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");
 });

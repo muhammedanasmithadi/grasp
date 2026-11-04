@@ -193,5 +193,67 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       geometry,
     };
   });
+
+  // De-penetration: authored positions routinely interpenetrate (the
+  // model has no collision sense). Relax solid pairs apart in plan
+  // view (x/z only, so stacking and heights survive) until AABBs no
+  // longer overlap. Assemblies stay clustered; chaos becomes contact.
+  const solids = nodes.filter(
+    (n) =>
+      n.type !== "tube" &&
+      n.type !== "points" &&
+      n.type !== "plane" &&
+      n.type !== "circle" &&
+      n.type !== "ring" &&
+      !isBackdropNode(n)
+  );
+  const boxOf = (n: DslNode) => {
+    const e = estimateExtents(n);
+    const [x, y, z] = n.transform.p;
+    return { x, y, z, hx: e.hx, hy: e.hy, hz: e.hz };
+  };
+  for (let iter = 0; iter < 60; iter++) {
+    let moved = false;
+    for (let i = 0; i < solids.length; i++) {
+      for (let j = i + 1; j < solids.length; j++) {
+        const a = boxOf(solids[i]);
+        const b = boxOf(solids[j]);
+        if (Math.abs(a.y - b.y) >= a.hy + b.hy) continue; // stacked, not colliding
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const penX = a.hx + b.hx - Math.abs(dx);
+        const penZ = a.hz + b.hz - Math.abs(dz);
+        if (penX <= 0 || penZ <= 0) continue;
+        moved = true;
+        if (penX <= penZ) {
+          const push = (penX / 2 + 0.02) * (dx >= 0 ? 1 : -1);
+          solids[i].transform = { ...solids[i].transform, p: [a.x - push, a.y, a.z] as unknown as Vec3 };
+          solids[j].transform = { ...solids[j].transform, p: [b.x + push, b.y, b.z] as unknown as Vec3 };
+        } else {
+          const push = (penZ / 2 + 0.02) * (dz >= 0 ? 1 : -1);
+          solids[i].transform = { ...solids[i].transform, p: [a.x, a.y, a.z - push] as unknown as Vec3 };
+          solids[j].transform = { ...solids[j].transform, p: [b.x, b.y, b.z + push] as unknown as Vec3 };
+        }
+      }
+    }
+    if (!moved) break;
+  }
+  // Re-center in plan after relaxation so pushes cannot drift the scene.
+  if (solids.length > 0) {
+    let lo = Infinity, hi = -Infinity, loZ = Infinity, hiZ = -Infinity;
+    for (const n of solids) {
+      const b = boxOf(n);
+      lo = Math.min(lo, b.x - b.hx); hi = Math.max(hi, b.x + b.hx);
+      loZ = Math.min(loZ, b.z - b.hz); hiZ = Math.max(hiZ, b.z + b.hz);
+    }
+    const ox = (lo + hi) / 2;
+    const oz = (loZ + hiZ) / 2;
+    for (const n of solids) {
+      n.transform = {
+        ...n.transform,
+        p: [n.transform.p[0] - ox, n.transform.p[1], n.transform.p[2] - oz] as Vec3,
+      };
+    }
+  }
   return { ...dsl, nodes };
 }

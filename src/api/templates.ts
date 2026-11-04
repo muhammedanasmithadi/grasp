@@ -6,18 +6,30 @@
 // parameters are validated before any geometry is built.
 
 import type { SceneDsl } from "../types";
-import { validCrankSlider, type CrankSliderParams } from "./kinematics";
+import {
+  validCrankSlider,
+  pendulumPeriod,
+  type CrankSliderParams,
+  type PendulumParams,
+} from "./kinematics";
 
 export const CRANK_SLIDER_PARAMS: CrankSliderParams = {
   crankRadius: 0.9,
   rodLength: 3.2,
 };
 
+export const PENDULUM_PARAMS: PendulumParams = {
+  length: 2.6,
+  amplitude: 0.55,
+  period: pendulumPeriod(2.6),
+};
+
 /** Route a concept to a template, or null. Deliberately narrow:
  * a false negative costs an illustrative scene; a false positive
  * would cost correctness. */
-export function matchTemplate(concept: string): "crank-slider" | null {
+export function matchTemplate(concept: string): "crank-slider" | "pendulum" | null {
   const q = ` ${concept.toLowerCase()} `;
+  if (q.includes(" pendulum ")) return "pendulum";
   const hits = [
     " crank ",
     " crankshaft ",
@@ -195,6 +207,155 @@ export function crankSliderScene(question: string): SceneDsl {
         becauseOf: ["piston"],
         probe: { kind: "trace", prompt: "Which part moves in a straight line?", answer: "piston" },
         narration: "Guided by the cylinder, the piston turns rotation into straight-line motion. Idealized: rigid parts, no friction.",
+      },
+    ],
+    audio: { layers: ["ambience", "mech"] },
+  };
+}
+
+/** Pendulum teaching scene. Pivot at (0, 3.6, 0); rod hangs along -y;
+ * bob at the rod end. Swing comes from pendulumAngle in kinematics.ts.
+ * Idealized: rigid rod, no friction, small-angle period. */
+export function pendulumScene(question: string): SceneDsl {
+  const p = PENDULUM_PARAMS;
+  const pivotY = 3.6;
+  const mat = (tint: string, metalness = 0.6, roughness = 0.4) => ({
+    roughness,
+    metalness,
+    tint,
+  });
+  return {
+    dslVersion: "0.1",
+    concept: {
+      question,
+      medium: "3d",
+      mediumWhy: "Implemented pendulum template with an exact pivot and solved swing angle.",
+      verification: "sketch",
+      template: "pendulum",
+      templateParams: { length: p.length, amplitude: p.amplitude, period: p.period },
+    },
+    theme: { motif: "pendulum bench model", palette: "okabe-ito", keyAzimuth: 135 },
+    nodes: [
+      {
+        id: "base",
+        type: "box",
+        parent: null,
+        transform: { p: [0, 0.2, 0], r: [0, 0, 0], s: [1, 1, 1] },
+        material: mat("#5b5344", 0.2, 0.7),
+        label: "stand base",
+        geometry: { args: [3.4, 0.4, 1.4] },
+      },
+      {
+        id: "post",
+        type: "box",
+        parent: null,
+        transform: { p: [-1.3, 1.95, 0], r: [0, 0, 0], s: [1, 1, 1] },
+        material: mat("#5b5344", 0.2, 0.7),
+        label: "stand post",
+        geometry: { args: [0.35, 3.5, 0.8] },
+      },
+      {
+        id: "arm",
+        type: "box",
+        parent: null,
+        transform: { p: [-0.55, 3.7, 0], r: [0, 0, 0], s: [1, 1, 1] },
+        material: mat("#5b5344", 0.2, 0.7),
+        label: "top arm",
+        geometry: { args: [1.9, 0.3, 0.8] },
+      },
+      {
+        id: "pivot",
+        type: "cylinder",
+        parent: null,
+        transform: { p: [0, pivotY, 0], r: [Math.PI / 2, 0, 0], s: [1, 1, 1] },
+        material: mat("#c9a227", 0.85, 0.3),
+        label: "pivot axle",
+        geometry: { args: [0.12, 0.12, 0.7, 16] },
+      },
+      {
+        id: "rod",
+        type: "box",
+        parent: null,
+        transform: { p: [0, pivotY - p.length / 2, 0], r: [0, 0, 0], s: [1, 1, 1] },
+        material: mat("#8a6d1f", 0.8, 0.3),
+        label: "pendulum rod",
+        geometry: { args: [0.09, p.length, 0.09] },
+      },
+      {
+        id: "bob",
+        type: "sphere",
+        parent: null,
+        transform: { p: [0, pivotY - p.length, 0], r: [0, 0, 0], s: [1, 1, 1] },
+        material: mat("#b03a2e", 0.7, 0.3),
+        label: "pendulum bob",
+        geometry: { args: [0.42, 32, 32] },
+      },
+    ],
+    joints: [
+      {
+        id: "j-rod",
+        type: "hinge",
+        a: "post",
+        b: "rod",
+        anchor: [0, pivotY, 0],
+        axis: [0, 0, 1],
+        range: [-32, 32],
+        driver: { kind: "time", rpm: 12 },
+      },
+      {
+        id: "j-bob",
+        type: "hinge",
+        a: "rod",
+        b: "bob",
+        anchor: [0, pivotY, 0],
+        axis: [0, 0, 1],
+        range: [-32, 32],
+        driver: { kind: "time", rpm: 12 },
+      },
+    ],
+    groups: [
+      { id: "g-stand", label: "stand", members: ["base", "post", "arm"] },
+      { id: "g-swing", label: "swing arm", members: ["rod", "bob", "pivot"] },
+    ],
+    edges: [
+      { from: "arm", to: "pivot", rel: "holds" },
+      { from: "pivot", to: "rod", rel: "carries" },
+      { from: "rod", to: "bob", rel: "carries" },
+    ],
+    flows: [],
+    camera: { axisOfAction: [0, 0, 1], shots: [] },
+    beats: [
+      {
+        id: "b1",
+        t: [0, 6],
+        goal: "The bob swings from its highest point",
+        becauseOf: ["bob"],
+        probe: { kind: "trace", prompt: "Which part swings lowest through the middle?", answer: "bob" },
+        narration: "Released from one side, the bob falls through the bottom of the arc and climbs the other side.",
+      },
+      {
+        id: "b2",
+        t: [6, 12],
+        goal: "The rod pivots on a fixed axle",
+        becauseOf: ["rod"],
+        probe: { kind: "trace", prompt: "Which part rotates about the fixed axle?", answer: "rod" },
+        narration: "The rod turns about the pivot axle; the axle itself never moves.",
+      },
+      {
+        id: "b3",
+        t: [12, 18],
+        goal: "One full swing takes a steady period",
+        becauseOf: ["pivot"],
+        probe: { kind: "trace", prompt: "What stays fixed while everything swings?", answer: "pivot" },
+        narration: `Each full swing takes about ${p.period.toFixed(1)} seconds, set by the rod length alone. Idealized: no friction, so the swing never decays.`,
+      },
+      {
+        id: "b4",
+        t: [18, 24],
+        goal: "Speed peaks at the bottom",
+        becauseOf: ["bob"],
+        probe: { kind: "trace", prompt: "Where is the bob moving fastest?", answer: "bob" },
+        narration: "The bob is fastest at the bottom of the arc and momentarily still at each end.",
       },
     ],
     audio: { layers: ["ambience", "mech"] },

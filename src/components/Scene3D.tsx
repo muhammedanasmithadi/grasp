@@ -26,7 +26,7 @@ import { getGrainTexture, getMapTexture, getLinearTexture, getStageTexture } fro
 import { estimateExtents } from '../api/layout'
 import { DetailFor } from './details'
 import { substanceUrl, normalForAlbedo } from '../api/substance'
-import { crankSliderPose } from '../api/kinematics'
+import { crankSliderPose, pendulumAngle } from '../api/kinematics'
 import type { DslEdge } from '../types'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
@@ -418,6 +418,7 @@ function DslNodeMesh({
   allJoints,
   allNodes,
   templateParams,
+  templateKind,
   clockRef,
   showLabel,
   floorY,
@@ -429,7 +430,8 @@ function DslNodeMesh({
   joints: DslJoint[]
   allJoints: DslJoint[]
   allNodes: DslNode[]
-  templateParams?: { crankRadius: number; rodLength: number }
+  templateParams?: { crankRadius?: number; rodLength?: number; length?: number; amplitude?: number; period?: number }
+  templateKind?: string
   clockRef: React.MutableRefObject<number>
   showLabel: boolean
   floorY: number
@@ -453,12 +455,36 @@ function DslNodeMesh({
     }
 
     if (templateParams) {
-      // Supported template: poses come from kinematics.ts, the same
+      // Supported templates: poses come from kinematics.ts, the same
       // functions the tests assert. Roles derive from joint wiring.
+      if (templateKind === 'pendulum') {
+        const theta = pendulumAngle(t, {
+          length: templateParams.length ?? 2.6,
+          amplitude: templateParams.amplitude ?? 0.55,
+          period: templateParams.period ?? 3.24,
+        })
+        const hingeJ = joints.find((j) => j.type === 'hinge')
+        if (hingeJ) {
+          groupRef.current.position.set(hingeJ.anchor[0], hingeJ.anchor[1], hingeJ.anchor[2])
+          groupRef.current.rotation.set(node.transform.r[0], node.transform.r[1], theta)
+          if (meshRef.current) {
+            meshRef.current.position.set(
+              node.transform.p[0] - hingeJ.anchor[0],
+              node.transform.p[1] - hingeJ.anchor[1],
+              node.transform.p[2] - hingeJ.anchor[2]
+            )
+            meshRef.current.scale.set(node.transform.s[0], node.transform.s[1], node.transform.s[2])
+          }
+        }
+        return
+      }
       const hinge = joints.find((j) => j.type === 'hinge') ?? allJoints.find((j) => j.type === 'hinge')
       const rpm = hinge?.driver?.rpm ?? 24
       const theta = ((rpm / 60) * Math.PI * 2 * t) % (Math.PI * 2)
-      const pose = crankSliderPose(theta, templateParams)
+      const pose = crankSliderPose(theta, {
+        crankRadius: templateParams.crankRadius ?? 0.9,
+        rodLength: templateParams.rodLength ?? 3.2,
+      })
       const sliderJoint = allJoints.find((j) => j.type === 'slider')
       const isWheel = joints.some((j) => j.type === 'hinge' && Math.hypot(j.anchor[0] - node.transform.p[0], j.anchor[1] - node.transform.p[1]) < 0.01)
       const isPin = joints.some((j) => j.type === 'hinge' && Math.hypot(j.anchor[0] - node.transform.p[0], j.anchor[1] - node.transform.p[1]) >= 0.01)
@@ -476,7 +502,7 @@ function DslNodeMesh({
         oy = midY - node.transform.p[1]
         rz = Math.atan2(-pose.pin.y, pose.sliderX - pose.pin.x)
       } else if (sliderJoint && node.id === sliderJoint.b) {
-        const rest = templateParams.crankRadius + templateParams.rodLength
+        const rest = (templateParams.crankRadius ?? 0.9) + (templateParams.rodLength ?? 3.2)
         ox = pose.sliderX - rest
       }
       groupRef.current.position.set(
@@ -769,14 +795,19 @@ function EdgeLines({
         const b = positions.get(e.to)
         if (!a || !b) return null
         const mid = a.clone().add(b).multiplyScalar(0.5)
+        // Short edges: the line itself reads clearly and stacked rel
+        // labels would only collide. Label only readable distances.
+        const showRel = a.distanceTo(b) > 1.4
         return (
           <group key={i}>
             <Line points={[a, b]} color="#b8860b" linewidth={2} transparent opacity={0.65} />
-            <group position={mid}>
-              <Html center zIndexRange={[15, 0]}>
-                <div style={{ ...LABEL_STYLE, fontSize: 8, padding: '1px 4px', opacity: 0.9 }}>{e.rel}</div>
-              </Html>
-            </group>
+            {showRel && (
+              <group position={mid}>
+                <Html center zIndexRange={[15, 0]}>
+                  <div style={{ ...LABEL_STYLE, fontSize: 8, padding: '1px 4px', opacity: 0.9 }}>{e.rel}</div>
+                </Html>
+              </group>
+            )}
           </group>
         )
       })}
@@ -1123,7 +1154,8 @@ interface Scene3DProps {
   joints?: DslJoint[]
   groups?: DslGroup[]
   edges?: DslEdge[]
-  templateParams?: { crankRadius: number; rodLength: number }
+  templateParams?: { crankRadius?: number; rodLength?: number; length?: number; amplitude?: number; period?: number }
+  templateKind?: string
   speed?: number
   time?: number
   playing?: boolean
@@ -1146,6 +1178,7 @@ export default function Scene3D({
   groups = [],
   edges = [],
   templateParams,
+  templateKind,
   speed = 1,
   time = 0,
   playing = true,
@@ -1416,6 +1449,7 @@ export default function Scene3D({
               allJoints={joints}
               allNodes={visibleNodes}
               templateParams={templateParams}
+              templateKind={templateKind}
               clockRef={clockRef}
               showLabel={labelVisible(n.id)}
               floorY={box.min.y}

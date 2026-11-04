@@ -28,6 +28,12 @@ export function verifyScene(dsl: SceneDsl): Verification {
       detail: 'Implemented crank-slider template; idealized kinematics (rigid parts, no friction), motion functions unit-tested.',
     };
   }
+  if (dsl.concept.template === 'pendulum') {
+    return {
+      badge: 'interactive',
+      detail: 'Implemented pendulum template; idealized small-angle kinematics (no friction), motion functions unit-tested.',
+    };
+  }
   return {
     badge: 'illustrative',
     detail: 'Illustrative schematic; parts and motion are model-proposed and have not been mechanically validated.',

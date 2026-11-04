@@ -64,3 +64,20 @@ export function crankSliderPose(
     rodMid: { x: (pin.x + sliderX) / 2, y: pin.y / 2 },
   };
 }
+
+export interface PendulumParams {
+  length: number;
+  amplitude: number; // radians
+  period: number; // seconds, 2*pi*sqrt(L/g) for the authored length
+}
+
+export function pendulumPeriod(length: number, g = 9.81): number {
+  return 2 * Math.PI * Math.sqrt(length / g);
+}
+
+/** Small-angle pendulum angle at time t. Idealized: no friction, so
+ * amplitude never decays; period is amplitude-independent in this
+ * approximation (true within ~1% below 25 degrees). */
+export function pendulumAngle(t: number, p: PendulumParams): number {
+  return p.amplitude * Math.cos((2 * Math.PI * t) / p.period);
+}

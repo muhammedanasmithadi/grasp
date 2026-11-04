@@ -2,6 +2,8 @@ import React, { useReducer, useState, useCallback, useMemo } from 'react'
 import { Effect } from 'effect'
 import { metaModelAPI } from './api/client'
 import { createMutation } from './api/mutations'
+import { crankSliderScene } from './api/templates'
+import { adaptDslToScene } from './api/parser'
 import Scene3D from './components/Scene3D'
 import Scene2D from './components/Scene2D'
 import type { AppState, AppAction, SceneData, Beat } from './types'
@@ -536,6 +538,18 @@ export default function App() {
                   </div>
                 )}
                 <p className="text-sm text-slate leading-relaxed mt-4 italic text-center">Any mechanism, any concept. Agents reconstruct the causal chain; you learn by repairing what they break.</p>
+                <button
+                  className="mt-6 px-5 py-3 border-2 border-c9ba9e bg-white text-[11px] font-bold text-2c2418 uppercase tracking-widest hover:bg-b8860b hover:text-white transition-all"
+                  onClick={() => {
+                    const scene = adaptDslToScene(
+                      crankSliderScene('How does a crankshaft turn a piston?')
+                    )
+                    dispatch({ type: 'ASK_SUCCESS', payload: scene })
+                  }}
+                >
+                  No API key? Run the built-in crank-slider model
+                </button>
+                <p className="text-[11px] text-slate mt-2 text-center">A real interactive mechanism, computed locally. No network needed.</p>
               </div>
             )}
             {screen === 'scene' && (
@@ -591,14 +605,8 @@ export default function App() {
                       joints={dslJoints}
                       groups={sceneData?.dsl?.groups ?? []}
                       edges={sceneData?.dsl?.edges ?? []}
-                      templateParams={
-                        sceneData?.dsl?.concept.templateParams
-                          ? {
-                              crankRadius: sceneData.dsl.concept.templateParams.crankRadius ?? 0.9,
-                              rodLength: sceneData.dsl.concept.templateParams.rodLength ?? 3.2,
-                            }
-                          : undefined
-                      }
+                      templateParams={sceneData?.dsl?.concept.templateParams}
+                      templateKind={sceneData?.dsl?.concept.template}
                       speed={speed}
                       time={beatTime}
                       playing={playing}

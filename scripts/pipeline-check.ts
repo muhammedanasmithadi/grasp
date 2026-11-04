@@ -11,7 +11,8 @@ import { scoreSceneDsl, ACCEPT_SCORE } from "../src/api/quality.ts";
 import { particleBehavior } from "../src/components/Scene3D.tsx";
 import { normalizeArgs } from "../src/api/sceneCode.ts";
 import { verifyScene } from "../src/api/verify.ts";
-import { crankSliderScene, matchTemplate } from "../src/api/templates.ts";
+import { crankSliderScene, pendulumScene, matchTemplate } from "../src/api/templates.ts";
+import { pendulumAngle, pendulumPeriod } from "../src/api/kinematics.ts";
 import { estimateExtents } from "../src/api/layout.ts";
 import { crankSliderPose, sliderPosition, validCrankSlider } from "../src/api/kinematics.ts";
 import { layoutDiagram } from "../src/components/diagramLayout.ts";
@@ -281,6 +282,13 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   // 23. Security: browser source carries no provider credential path.
   const clientSrc = readFileSync("src/api/client.ts", "utf8");
   check("client-no-key", !clientSrc.includes("VITE_META_API_KEY") && !clientSrc.includes("api.meta.ai") && clientSrc.includes("/api/chat"));
+
+  // 24. Pendulum template: exact period, bounded swing, routing.
+  check("pendulum-period", Math.abs(pendulumPeriod(2.6) - 3.24) < 0.01, pendulumPeriod(2.6).toFixed(3));
+  check("pendulum-bounds", Math.abs(pendulumAngle(0, { length: 2.6, amplitude: 0.55, period: 3.24 })) - 0 < 0.56 && Math.abs(pendulumAngle(0, { length: 2.6, amplitude: 0.55, period: 3.24 })) > 0.54);
+  const pend = pendulumScene("how a pendulum swings");
+  check("pendulum-interactive", verifyScene(pend).badge === "interactive" && adaptDslToScene(pend).representation === "template-3d");
+  check("pendulum-routing", matchTemplate("how a pendulum swings") === "pendulum" && matchTemplate("how a pendulum clock") === null || matchTemplate("pendulum") === "pendulum");
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

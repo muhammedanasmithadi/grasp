@@ -3,7 +3,7 @@ import type { SceneData } from "../types";
 import { parseSceneCode } from "./sceneCode";
 import { adaptDslToScene } from "./parser";
 import { scoreSceneDsl, ACCEPT_SCORE } from "./quality";
-import { matchTemplate, crankSliderScene } from "./templates";
+import { matchTemplate, crankSliderScene, pendulumScene } from "./templates";
 import {
   ApiHttpError,
   EmptyResponse,
@@ -230,11 +230,14 @@ export class MetaModelAPI {
       // Supported-mechanism routing, decided in code: a matched
       // template is built locally with validated geometry and never
       // touches the model. No template claim from a model can do this.
-      if (matchTemplate(concept) === "crank-slider") {
-        const scene = adaptDslToScene(crankSliderScene(concept));
+      const tpl = matchTemplate(concept);
+      if (tpl) {
+        const scene = adaptDslToScene(
+          tpl === "pendulum" ? pendulumScene(concept) : crankSliderScene(concept)
+        );
         scene.qualityScore = scene.dsl ? scoreSceneDsl(scene.dsl).score : undefined;
         yield* Effect.sync(() =>
-          console.log(`[Grasp] routed to crank-slider template, quality ${scene.qualityScore}/100`)
+          console.log(`[Grasp] routed to ${tpl} template, quality ${scene.qualityScore}/100`)
         );
         return scene;
       }

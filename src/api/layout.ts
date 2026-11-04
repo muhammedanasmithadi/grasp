@@ -197,7 +197,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   const groupOf = new Map<string, string>();
   for (const g of dsl.groups ?? []) for (const m of g.members) groupOf.set(m, g.id);
   // No giants, no specks: uniform presence for solid primitives.
-  // Rescale s so the largest half-extent lands in [0.5, 1.6]; proportions
+  // Rescale s so the largest half-extent lands in [0.5, 1.2]; proportions
   // preserved. A tall thin mast counts by height, not just girth.
   // Models keep authorial scale but are capped, never grown: a hero
   // scan must not dwarf the row it belongs to.
@@ -220,8 +220,8 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
     }
     const biggest = Math.max(e.hx, e.hy, e.hz);
     const clamped = n.type === "model"
-      ? Math.min(biggest, 1.6)
-      : Math.min(Math.max(biggest, 0.5), 1.6);
+      ? Math.min(biggest, 1.2)
+      : Math.min(Math.max(biggest, 0.5), 1.2);
     const k = clamped / biggest;
     if (Math.abs(k - 1) < 0.01) continue;
     const s = n.transform.s;

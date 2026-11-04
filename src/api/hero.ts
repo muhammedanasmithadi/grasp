@@ -8,8 +8,11 @@ import type { DslNode, SceneDsl } from "../types";
 
 const PH = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k";
 const KH = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models";
+const TJ = "https://threejs.org/examples/models/gltf";
 
 // Whole-word concept match -> verified scan URL + display label.
+// Sources: Poly Haven props, Khronos sample assets (binary .glb where
+// available), three.js example figures. Every URL below is HTTP-verified.
 const HEROES: Array<{ words: string[]; url: string; label: string }> = [
   { words: ["drill"], url: `${PH}/Drill_01/Drill_01_1k.gltf`, label: "power drill" },
   { words: ["lantern"], url: `${PH}/Lantern_01/Lantern_01_1k.gltf`, label: "lantern" },
@@ -29,13 +32,36 @@ const HEROES: Array<{ words: string[]; url: string; label: string }> = [
   { words: ["bottle"], url: `${KH}/WaterBottle/glTF-Binary/WaterBottle.glb`, label: "water bottle" },
   { words: ["boombox", "radio", "stereo"], url: `${KH}/BoomBox/glTF-Binary/BoomBox.glb`, label: "boombox" },
   { words: ["avocado"], url: `${KH}/Avocado/glTF-Binary/Avocado.glb`, label: "avocado" },
+  { words: ["horse", "pony", "stallion"], url: `${TJ}/Horse.glb`, label: "horse" },
+  { words: ["parrot"], url: `${TJ}/Parrot.glb`, label: "parrot" },
+  { words: ["flamingo"], url: `${TJ}/Flamingo.glb`, label: "flamingo" },
+  { words: ["stork", "heron", "crane bird"], url: `${TJ}/Stork.glb`, label: "wading bird" },
+  { words: ["soldier", "person", "people", "human", "man", "woman", "troops", "guard"], url: `${TJ}/Soldier.glb`, label: "figure" },
+  { words: ["robot", "android", "cyborg"], url: `${TJ}/Xbot.glb`, label: "robot" },
+  { words: ["dragon"], url: `${KH}/DragonAttenuation/glTF-Binary/DragonAttenuation.glb`, label: "dragon" },
+  { words: ["fish", "goldfish", "trout", "bass", "carp"], url: `${KH}/BarramundiFish/glTF-Binary/BarramundiFish.glb`, label: "fish" },
+  { words: ["watch", "wristwatch", "timepiece"], url: `${KH}/ChronographWatch/glTF-Binary/ChronographWatch.glb`, label: "watch" },
+  { words: ["shoe", "boot", "sneaker", "footwear", "heel"], url: `${KH}/MaterialsVariantsShoe/glTF-Binary/MaterialsVariantsShoe.glb`, label: "shoe" },
+  { words: ["skull", "skeleton", "cranium"], url: `${KH}/ScatteringSkull/glTF-Binary/ScatteringSkull.glb`, label: "skull" },
+  { words: ["toy car", "hot wheels"], url: `${KH}/ToyCar/glTF-Binary/ToyCar.glb`, label: "toy car" },
+  { words: ["car", "automobile", "sedan", "coupe"], url: `${KH}/CarConcept/glTF-Binary/CarConcept.glb`, label: "car" },
+  { words: ["vintage camera", "antique camera", "film camera"], url: `${KH}/AntiqueCamera/glTF-Binary/AntiqueCamera.glb`, label: "vintage camera" },
+  { words: ["lamp", "table lamp", "tiffany"], url: `${KH}/StainedGlassLamp/glTF-Binary/StainedGlassLamp.glb`, label: "lamp" },
+  { words: ["mosquito", "gnat", "insect", "bug"], url: `${KH}/MosquitoInAmber/glTF-Binary/MosquitoInAmber.glb`, label: "mosquito in amber" },
+  { words: ["forge", "coals", "fire pit", "kiln"], url: `${KH}/PotOfCoals/glTF-Binary/PotOfCoals.glb`, label: "bed of coals" },
 ];
 
 export function injectHero(dsl: SceneDsl): SceneDsl {
   if (dsl.nodes.some((n) => n.type === "model")) return dsl;
   const q = ` ${dsl.concept.question.toLowerCase()} `;
+  // Whole words, plural-tolerant ("horses" matches "horse").
   const hit = HEROES.find((h) =>
-    h.words.some((w) => q.includes(` ${w.trim()} `))
+    h.words.some((w) => {
+      const t = w.trim();
+      return (
+        q.includes(` ${t} `) || q.includes(` ${t}s `) || q.includes(` ${t}es `)
+      );
+    })
   );
   if (!hit) return dsl;
   const hero: DslNode = {

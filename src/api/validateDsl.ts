@@ -27,6 +27,7 @@ const MODEL_URL_ALLOWLIST = [
   "https://github.com/KhronosGroup/glTF-Sample-Assets/",
   "https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Assets@",
   "https://dl.polyhaven.org/file/ph-assets/Models/",
+  "https://threejs.org/examples/models/",
 ];
 const TEXTURE_URL_ALLOWLIST = [
   "https://dl.polyhaven.org/file/ph-assets/Textures/",

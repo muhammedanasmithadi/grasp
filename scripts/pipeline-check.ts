@@ -110,6 +110,11 @@ const run = Effect.gen(function* () {
   const withHero = injectHero(drillDsl as SceneDsl);
   check("hero-injected", withHero.nodes.some((n) => n.id === "hero-scan" && n.type === "model"), `${withHero.nodes.length} nodes`);
   check("hero-grouped", withHero.groups[0]?.members.includes("hero-scan") ?? false);
+  const horseDsl = { ...laid, concept: { ...laid.concept, question: "how horses gallop across fields" } };
+  const withHorse = injectHero(horseDsl as SceneDsl);
+  check("hero-horse", withHorse.nodes.some((n) => n.id === "hero-scan" && n.label === "horse"), "horse injected");
+  const fishDsl = { ...laid, concept: { ...laid.concept, question: "how a fish swims upstream" } };
+  check("hero-fish", injectHero(fishDsl as SceneDsl).nodes.some((n) => n.label === "fish"));
   const noHero = injectHero(laid);
   check("hero-skipped", noHero.nodes.length === laid.nodes.length);
   const dupHero = injectHero(withHero);

@@ -7,8 +7,27 @@ import { adaptDslToScene } from "../src/api/parser.ts";
 import { createMutation } from "../src/api/mutations.ts";
 import { DetailFor } from "../src/components/details.tsx";
 import { injectHero } from "../src/api/hero.ts";
+import { scoreSceneDsl, ACCEPT_SCORE } from "../src/api/quality.ts";
 import { substanceTexture, liftBlackTint, brightFaceTint, tubePointsRelative } from "../src/components/Scene3D.tsx";
 import type { SceneDsl } from "../src/types.ts";
+
+
+const THIN = `
+concept({"question":"thin abstract demo","medium":"3d","mediumWhy":"x","verification":"sketch"})
+theme({"motif":"m","palette":"okabe-ito","keyAzimuth":135})
+box({"id":"p1","parent":null,"transform":{"p":[-20,5,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#8a8272"},"label":"part one","geometry":{"args":[1,1,1]}})
+box({"id":"p2","parent":null,"transform":{"p":[-10,5,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#8a8272"},"label":"part two","geometry":{"args":[1,1,1]}})
+box({"id":"p3","parent":null,"transform":{"p":[0,5,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#8a8272"},"label":"part three","geometry":{"args":[1,1,1]}})
+box({"id":"p4","parent":null,"transform":{"p":[10,5,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#8a8272"},"label":"part four","geometry":{"args":[1,1,1]}})
+box({"id":"p5","parent":null,"transform":{"p":[20,5,0],"r":[0,0,0],"s":[1,1,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#8a8272"},"label":"part five","geometry":{"args":[1,1,1]}})
+box({"id":"p6","parent":null,"transform":{"p":[0,9,9],"r":[0,0,0],"s":[1,2,1]},"material":{"roughness":0.5,"metalness":0.6,"tint":"#8a8272"},"label":"part six","geometry":{"args":[1,1,1]}})
+group({"id":"g1","label":"pair one","members":["p1","p2"]})
+hinge({"id":"j1","a":"p1","b":"p2","anchor":[0,0,0],"axis":[0,0,1],"range":[0,90],"driver":{"kind":"time","rpm":20}})
+beat({"id":"s1","t":[0,6],"goal":"g1","becauseOf":["p1"],"probe":{"kind":"trace","prompt":"p","answer":"p1"},"narration":"n"})
+beat({"id":"s2","t":[6,12],"goal":"g2","becauseOf":["p2"],"probe":{"kind":"trace","prompt":"p","answer":"p2"},"narration":"n"})
+beat({"id":"s3","t":[12,18],"goal":"g3","becauseOf":["p3"],"probe":{"kind":"trace","prompt":"p","answer":"p3"},"narration":"n"})
+camera({"axisOfAction":[0,1,0],"shots":[]})
+`;
 
 const GOOD = `
 concept({"question":"how a deadbolt lock opens with a key","medium":"3d","mediumWhy":"parts move in depth","verification":"sketch"})
@@ -169,6 +188,13 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   check("substance-earth", (substanceTexture(celNode("Globe Sphere") as never) ?? "").includes("earth_atmos_2048"));
   check("substance-moon", (substanceTexture(celNode("lunar disc") as never) ?? "").includes("moon_1024"));
 
+  // 13. Quality gate: the good world passes, a thin one does not.
+  const goodScore = scoreSceneDsl(laid);
+  check("quality-good-passes", goodScore.score >= ACCEPT_SCORE, `${goodScore.score}/100`);
+  const thin = (yield* parseSceneCode(THIN)) as SceneDsl;
+  const thinLaid = adaptDslToScene(thin).dsl!;
+  const thinScore = scoreSceneDsl(thinLaid);
+  check("quality-thin-fails", thinScore.score < ACCEPT_SCORE && thinScore.score < goodScore.score, `${thinScore.score}/100`);
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");
 });

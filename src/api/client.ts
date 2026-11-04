@@ -2,6 +2,7 @@ import { Effect, Schedule } from "effect";
 import type { SceneData } from "../types";
 import { parseSceneCode } from "./sceneCode";
 import { adaptDslToScene } from "./parser";
+import { scoreSceneDsl, ACCEPT_SCORE } from "./quality";
 import {
   ApiHttpError,
   EmptyResponse,
@@ -158,7 +159,7 @@ Rules: "$i" in a string becomes the index. {"$i":[base,step]} in a numeric slot 
 const singleAttempt = (
   concept: string,
   onStage?: (stage: "research" | "build") => void
-): Effect.Effect<SceneData, GenerateSceneError> =>
+): Effect.Effect<{ scene: SceneData; quality: number }, GenerateSceneError> =>
   Effect.gen(function* () {
     if (onStage) {
       yield* Effect.sync(() => onStage("research"));
@@ -177,16 +178,30 @@ const singleAttempt = (
     );
 
     const dsl = yield* parseSceneCode(content);
+    const scene = adaptDslToScene(dsl);
+    const quality = scene.dsl ? scoreSceneDsl(scene.dsl) : null;
     yield* Effect.sync(() =>
       console.log(
         `[MetaModelAPI] scene: ${dsl.nodes.length} nodes, ${dsl.groups.length} groups` +
           (dsl.groups.length > 0
             ? ` (${dsl.groups.map((g) => `${g.id}:${g.members.length}`).join(", ")})`
-            : "")
+            : "") +
+          (quality ? `, quality ${quality.score}/100` : "")
       )
     );
-    return adaptDslToScene(dsl);
+    return { scene, quality: quality?.score ?? 0 };
   });
+
+// Prompt variants for the quality loop. Each nudges a different weak
+// axis; temperature 0 makes each variant deterministic, so different
+// words are the only source of variety.
+const QUALITY_VARIANTS: Array<(concept: string) => string> = [
+  (c) => c,
+  (c) =>
+    `${c} (stage compactly: every part touching its neighbors in one tight row; texture every surface: brushed metal, wood grain, glass)`,
+  (c) =>
+    `${c} (compose each organ from 3 primitives in a named group; give the hero part glass transmission or an explicit texture map)`,
+];
 
 export class MetaModelAPI {
   constructor() {
@@ -215,10 +230,47 @@ export class MetaModelAPI {
       e.message.includes("E_SPINE_DUP") ||
       e.message.includes("E_GROUP_REQUIRED") ||
       e.message.includes("E_TUBE_SPRAWL");
-    return Effect.retry(singleAttempt(concept, onStage), {
-      times: MAX_ATTEMPTS - 1,
-      schedule: Schedule.exponential("1 second"),
-      while: (e) => !deterministic(e),
+    const attempt = (prompt: string) =>
+      Effect.retry(singleAttempt(prompt, onStage), {
+        times: MAX_ATTEMPTS - 1,
+        schedule: Schedule.exponential("1 second"),
+        while: (e) => !deterministic(e),
+      });
+    // Closed loop: try variants in order, keep the best-scoring scene,
+    // stop early once one passes. Weak worlds re-prompt instead of
+    // shipping the first draft; failures fall through to the next
+    // variant, and the last error stands if everything fails.
+    return Effect.gen(function* () {
+      let best: SceneData | null = null;
+      let bestScore = -1;
+      let lastError: GenerateSceneError | null = null;
+      for (const variant of QUALITY_VARIANTS) {
+        const out = (yield* attempt(variant(concept)).pipe(
+          Effect.match({
+            onFailure: (e) => ({ ok: false as const, error: e }),
+            onSuccess: (r) => ({ ok: true as const, ...r }),
+          })
+        )) as
+          | { ok: false; error: GenerateSceneError }
+          | { ok: true; scene: SceneData; quality: number };
+        if (!out.ok) {
+          lastError = out.error;
+          continue;
+        }
+        if (out.quality > bestScore) {
+          bestScore = out.quality;
+          best = out.scene;
+        }
+        if (out.quality >= ACCEPT_SCORE) break;
+      }
+      if (best) return best;
+      return yield* Effect.fail(
+        lastError ??
+          new ApiHttpError({
+            status: 0,
+            message: "E_API_HTTP: all quality attempts failed without a scene",
+          })
+      );
     });
   }
 }

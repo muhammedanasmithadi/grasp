@@ -25,6 +25,7 @@ const LABEL_STYLE: React.CSSProperties = {
 import { getGrainTexture, getMapTexture, getLinearTexture, getStageTexture } from './procedural'
 import { estimateExtents } from '../api/layout'
 import { DetailFor } from './details'
+import { substanceUrl } from '../api/substance'
 
 const PALETTE = ['#b8860b', '#e69f00', '#009e73', '#0072B2', '#D55E00', '#CC79A7']
 
@@ -134,44 +135,8 @@ function PartNode({
  * the part name usually still says what the matter is ("oak beam",
  * "steel shaft"). Map those words onto verified texture URLs so every
  * world gets real surfaces unconditionally. Explicit maps always win. */
-const SUBSTANCE_MAPS: Array<{ words: string[]; slug: string }> = [
-  { words: ['wood', 'oak', 'plank', 'beam', 'timber', 'log', 'tree', 'trunk', 'branch'], slug: 'dark_wooden_planks' },
-  { words: ['metal', 'steel', 'iron', 'aluminum', 'aluminium', 'shaft', 'rod', 'pipe', 'barrel', 'engine', 'axle', 'spindle'], slug: 'metal_plate' },
-  { words: ['brass', 'copper', 'bronze', 'key', 'gear', 'cog', 'spring', 'coil', 'pin', 'screw', 'bolt', 'dial', 'lock', 'hinge'], slug: 'blue_metal_plate' },
-  { words: ['rock', 'stone', 'boulder', 'cliff', 'mountain', 'concrete', 'cement', 'brick'], slug: 'brown_mud_rocks_01' },
-  { words: ['grass', 'lawn', 'meadow', 'field', 'ground', 'soil', 'dirt', 'earth', 'terrain'], slug: 'grass_ground' },
-  { words: ['marble', 'statue'], slug: 'marble_01' },
-  { words: ['fabric', 'cloth', 'canvas', 'denim', 'curtain', 'shirt', 'flag'], slug: 'denim_fabric' },
-  { words: ['sand', 'desert', 'beach'], slug: 'aerial_sand' },
-  { words: ['bark'], slug: 'bark_brown_01' },
-  { words: ['snow', 'ice', 'frost'], slug: 'snow_01' },
-  { words: ['plaster', 'wall', 'ceiling'], slug: 'grey_plaster' },
-]
-
-/** Non-PolyHaven albedo fallbacks (verified CORS-open hosts). */
-const REMOTE_MAPS: Array<{ words: string[]; url: string }> = [
-  {
-    words: ['earth', 'globe', 'planet', 'continent', 'ocean planet'],
-    url: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/earth_atmos_2048.jpg',
-  },
-  {
-    words: ['moon', 'lunar', 'crater'],
-    url: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/planets/moon_1024.jpg',
-  },
-]
-
 export function substanceTexture(node: DslNode): string | null {
-  if (node.type === 'tube' || node.type === 'points' || node.type === 'model') return null
-  const hay = `${node.label} ${node.id}`.toLowerCase()
-  for (const { words, slug } of SUBSTANCE_MAPS) {
-    if (words.some((w) => hay.includes(w))) {
-      return `https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/${slug}/${slug}_diff_1k.jpg`
-    }
-  }
-  for (const { words, url } of REMOTE_MAPS) {
-    if (words.some((w) => hay.includes(w))) return url
-  }
-  return null
+  return substanceUrl(node.label, node.id, node.type)
 }
 
 function taperedRadius(t: number): number {

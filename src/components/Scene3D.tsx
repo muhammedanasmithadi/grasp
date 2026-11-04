@@ -494,6 +494,19 @@ function faceSizeOf(node: DslNode): number {
           faceSizeOf(node)
         )
       )
+  // Active pulse without whiteout: the glow rides on emissive, so
+  // bright parts must barely glow while dark parts glow fully.
+  const glowLum = (() => {
+    const hex = expandHex(base)
+    if (!hex) return 0.5
+    return (
+      (0.299 * parseInt(hex.slice(1, 3), 16) +
+        0.587 * parseInt(hex.slice(3, 5), 16) +
+        0.114 * parseInt(hex.slice(5, 7), 16)) /
+      255
+    )
+  })()
+  const glowI = active || isFault ? 0.05 + 0.3 * (1 - glowLum) : 0
   const autoMap = node.material.map ?? substanceTexture(node)
   const mapTex = autoMap ? getMapTexture(autoMap) : undefined
   // Normal detail rides along: polyhaven albedo URLs have a matching
@@ -547,7 +560,7 @@ function faceSizeOf(node: DslNode): number {
             opacity={node.material.opacity ?? 1}
             side={THREE.DoubleSide}
             emissive={active || isFault ? (node.material.emissive ?? base) : '#000000'}
-            emissiveIntensity={active || isFault ? 0.35 : 0}
+            emissiveIntensity={glowI}
           />
         </mesh>
       ) : (
@@ -570,7 +583,7 @@ function faceSizeOf(node: DslNode): number {
           opacity={node.material.opacity ?? 1}
           side={isTube || node.type === 'plane' || node.type === 'circle' || node.type === 'ring' ? THREE.DoubleSide : THREE.FrontSide}
           emissive={active || isFault ? (node.material.emissive ?? base) : '#000000'}
-          emissiveIntensity={active || isFault ? 0.35 : 0}
+          emissiveIntensity={glowI}
         />
       </mesh>
       )}

@@ -1306,7 +1306,7 @@ export default function Scene3D({
       {!isFlat && (
         <EffectComposer multisampling={4}>
           <N8AO halfRes aoRadius={2} intensity={1.2} quality="performance" />
-          <Noise premultiply />
+          <Noise premultiply opacity={0.28} />
           <Bloom mipmapBlur intensity={0.45} luminanceThreshold={1.0} luminanceSmoothing={0.25} />
           <HueSaturation saturation={0.14} />
           <BrightnessContrast contrast={0.08} />

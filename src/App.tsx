@@ -440,6 +440,21 @@ export default function App() {
     }
   }, [currentBeat, lastBeatId])
 
+  // Cinematic autoplay: the lesson plays like a film, advancing beat
+  // to beat while playing. Pause (footer) stops both motion and travel;
+  // drills pause the film so the learner controls the pace.
+  React.useEffect(() => {
+    if (!playing || screen !== 'scene' || showMastery || sabotageMode) return
+    const id = setInterval(() => {
+      if (currentBeat < lastBeatId) {
+        dispatch({ type: 'NEXT_BEAT' })
+      } else {
+        setPlaying(false)
+      }
+    }, 6000)
+    return () => clearInterval(id)
+  }, [playing, screen, showMastery, sabotageMode, currentBeat, lastBeatId])
+
   return (
     <>
       <div className="fixed inset-0 z-0" style={{ background: '#f3efe1' }}>

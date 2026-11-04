@@ -863,46 +863,54 @@ function StageRig({
  * direction at the focus distance. Damped glides preserved user orbit
  * vectors straight into occluders (e.g. behind the stage board), so
  * beats cut instead of glide. Users orbit freely between cuts. */
+/** Cinematic beat travel: each beat is a shot. The camera glides to
+ * the beat's assembly (damped, ~1s ease) instead of cutting, like a
+ * film dolly following the flow. Grabbing the scene hands control to
+ * the user for a few seconds; autoplay resumes after. */
 function FocusRig({
   currentBeat,
   sceneKey,
   target,
   radius,
   flat,
+  userHoldRef,
 }: {
   currentBeat: number
   sceneKey: string
   target: THREE.Vector3
   radius: number
   flat: boolean
+  userHoldRef: React.MutableRefObject<number>
 }) {
   const camera = useThree((s) => s.camera)
   const controls = useThree((s) => s.controls) as unknown as {
     target: THREE.Vector3
     update: () => void
   } | null
+  const goal = useRef({ target: new THREE.Vector3(), dist: 10, ready: false })
   useEffect(() => {
-    if (flat || !controls) return
-    // The row runs along X with alternating z. Photograph it from the
-    // front-side, never down its length: a diagonal view foreshortens
-    // the street and drags edge-neighbors into the frame.
-    const dir = new THREE.Vector3(0.35, 0.6, 1).normalize()
-    const dist = Math.max(radius * 3.2, 6)
-    controls.target.copy(target)
-    camera.position.copy(target).addScaledVector(dir, dist)
+    goal.current.target.copy(target)
+    goal.current.dist = Math.max(radius * 3.2, 6)
+    goal.current.ready = true
+    console.info(
+      `[FocusRig] beat ${currentBeat} target=(${target.x.toFixed(1)},${target.y.toFixed(1)},${target.z.toFixed(1)}) focusR=${radius.toFixed(1)} dist=${goal.current.dist.toFixed(1)}`
+    )
+  }, [currentBeat, sceneKey, target, radius])
+  useFrame(() => {
+    if (flat || !controls || !goal.current.ready) return
+    if (Date.now() - userHoldRef.current < 3500) return
+    controls.target.lerp(goal.current.target, 0.055)
     const persp = camera as THREE.PerspectiveCamera
-    persp.near = Math.max(dist / 100, 0.05)
-    persp.far = dist * 30
+    const dir = camera.position.clone().sub(controls.target)
+    const len = Math.max(dir.length(), 0.001)
+    const next = len + (goal.current.dist - len) * 0.055
+    dir.multiplyScalar(1 / len)
+    camera.position.copy(controls.target).addScaledVector(dir, next)
+    persp.near = Math.max(next / 100, 0.05)
+    persp.far = next * 30
     persp.updateProjectionMatrix()
     controls.update()
-    console.info(
-      `[FocusRig] beat ${currentBeat} target=(${target.x.toFixed(1)},${target.y.toFixed(1)},${target.z.toFixed(1)}) focusR=${radius.toFixed(1)} dist=${dist.toFixed(1)}`
-    )
-    // controls/camera are deps: the mount pass can run before
-    // OrbitControls registers, and without them here beat 1 would
-    // never get its focus cut.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBeat, sceneKey, controls, camera])
+  })
   return null
 }
 /** Slow drifting dust motes. Cinematic air: the light needs
@@ -1250,6 +1258,7 @@ export default function Scene3D({
   const radius = Math.max(size.x, size.y, size.z) / 2
   const bg = backdrop ?? DEFAULT_BACKDROP
   const [spin, setSpin] = useState(true)
+  const userHoldRef = useRef(0)
   // A near-white backdrop whites out fog, dome, and grade with it.
   // Pull bright backdrops down to warm paper; night scenes unaffected.
   const safeBg = useMemo(() => {
@@ -1344,9 +1353,12 @@ export default function Scene3D({
     // Never equal establishing: a beat that frames the whole street is
     // a beat with no subject. Cap at three-quarters of the scene radius
     // so even all-group beats move closer than the opening wide.
+    // Beat 1 is the establishing shot: the whole assembled mechanism,
+    // uncapped. Later beats travel into their assembly.
+    if (currentBeat <= 1) return { target: center, radius }
     return { target: c, radius: Math.min(r, radius * 0.75) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(focusNodeIds), center, radius])
+  }, [JSON.stringify(focusNodeIds), center, radius, currentBeat])
 
   return (
     <Canvas
@@ -1360,10 +1372,10 @@ export default function Scene3D({
         gl.toneMappingExposure = 1.0
       }}
     >
-      <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat && spin} autoRotateSpeed={0.5} enableDamping onStart={() => setSpin(false)} />
+      <OrbitControls enableZoom={true} enablePan={!isFlat} enableRotate={!isFlat} makeDefault autoRotate={!isFlat && spin} autoRotateSpeed={0.5} enableDamping onStart={() => { setSpin(false); userHoldRef.current = Date.now() }} />
       {!isFlat && <SoftShadows size={12} samples={12} focus={0} />}
       <StageRig center={center} radius={radius} sceneKey={sceneKey} bg={safeBg} flat={isFlat} />
-      <FocusRig currentBeat={currentBeat} sceneKey={sceneKey} target={focus.target} radius={focus.radius} flat={isFlat} />
+      <FocusRig currentBeat={currentBeat} sceneKey={sceneKey} target={focus.target} radius={focus.radius} flat={isFlat} userHoldRef={userHoldRef} />
       <Stage topY={box.min.y - 0.02} subjectR={radius} bg={safeBg} cx={center.x} cz={center.z} />
       <LightRig center={center} radius={radius} />
       {/* Follow-spot on the active beat: the taught part reads as lit. */}

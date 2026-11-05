@@ -21,6 +21,7 @@ import { validateReferences } from "../src/api/validateDsl.ts";
 import { readFileSync } from "node:fs";
 import { normalForAlbedo } from "../src/api/substance.ts";
 import { substanceTexture, liftBlackTint, brightFaceTint, tubePointsRelative } from "../src/components/Scene3D.tsx";
+import { substanceStyle } from "../src/api/substance.ts";
 import type { SceneDsl } from "../src/types.ts";
 
 
@@ -353,6 +354,10 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   check("route-template", repOf("3d", "crank-slider") === "template-3d");
   check("route-2d", repOf("2d") === "diagram-2d");
   check("route-illustrative", repOf("3d") === "illustrative-3d" && repOf("hybrid") === "illustrative-2d");
+
+  // 29. Tubes get finishes but never maps; sprawl gate holds at 5.
+  check("tube-finish", (() => { const s = substanceStyle("brass valve", "p1", "tube"); return !!s && s.tint === "#C9A227" && s.metalness === 0.9; })());
+  check("tube-no-map", substanceTexture({ label: "copper pipe", id: "p1", type: "tube" } as never) === null);
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

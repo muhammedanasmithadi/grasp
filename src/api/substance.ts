@@ -35,11 +35,13 @@ export const REMOTE_MAPS: Array<{ words: string[]; url: string; tint: string; me
 export interface CanonicalStyle { tint: string; metalness: number; roughness: number }
 
 /** Code-owned material for a named substance. When a part's words name
- * matter, the renderer uses this — never the model's tint. Model
- * values survive only for unnamed parts and for functional fields
- * (transmission, emissive, opacity), which are behavior, not taste. */
+ * matter, the renderer uses this — never the model's tint. Tubes get
+ * tint and finish but never maps (stretched textures on hoses read
+ * worse than clean metal). Model values survive only for unnamed
+ * parts and for functional fields (transmission, emissive, opacity),
+ * which are behavior, not taste. */
 export function substanceStyle(label: string, id: string, type: string): CanonicalStyle | null {
-  if (type === 'tube' || type === 'points' || type === 'model') return null;
+  if (type === 'points' || type === 'model') return null;
   const hay = `${label} ${id}`.toLowerCase();
   for (const { words, tint, metalness, roughness } of [...SUBSTANCE_MAPS, ...REMOTE_MAPS]) {
     if (words.some((w) => hay.includes(w))) return { tint, metalness, roughness };
@@ -49,7 +51,7 @@ export function substanceStyle(label: string, id: string, type: string): Canonic
 
 /** True when a part's words name a real substance (or carry matter). */
 export function matchesSubstance(label: string, id: string, type: string): boolean {
-  if (type === 'tube' || type === 'points' || type === 'model') return false;
+  if (type === 'points' || type === 'model') return false;
   const hay = `${label} ${id}`.toLowerCase();
   return (
     SUBSTANCE_MAPS.some(({ words }) => words.some((w) => hay.includes(w))) ||

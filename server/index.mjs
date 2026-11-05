@@ -12,7 +12,7 @@ import http from "node:http";
 const PORT = Number(process.env.PORT || 8787);
 const API_KEY = process.env.META_API_KEY || process.env.VITE_META_API_KEY || "";
 const API_BASE = (process.env.META_API_BASE || "https://api.meta.ai/v1").replace(/\/$/, "");
-const MODEL = process.env.META_MODEL || "muse-wonder-1.0";
+const MODEL = process.env.META_MODEL || "muse-spark-1.3-contributor";
 const MAX_BODY = 256 * 1024;
 const RATE_LIMIT = 30; // requests per minute per IP
 const RATE_WINDOW_MS = 60_000;

@@ -10,6 +10,7 @@ import { injectHero } from "../src/api/hero.ts";
 import { scoreSceneDsl, ACCEPT_SCORE } from "../src/api/quality.ts";
 import { particleBehavior } from "../src/components/Scene3D.tsx";
 import { normalizeArgs } from "../src/api/sceneCode.ts";
+import { representationOf } from "../src/api/parser.ts";
 import { verifyScene } from "../src/api/verify.ts";
 import { crankSliderScene, pendulumScene, matchTemplate } from "../src/api/templates.ts";
 import { pendulumAngle, pendulumPeriod } from "../src/api/kinematics.ts";
@@ -344,6 +345,14 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   const midX = (na.transform.p[0] + nb.transform.p[0]) / 2;
   check("joint-anchor-midpoint", Math.abs(jj.anchor[0] - midX) < 0.01, `ax=${jj.anchor[0].toFixed(2)} mid=${midX.toFixed(2)}`);
   check("joint-rpm-clamped", (jj.driver?.rpm ?? 999) < 120, `rpm=${jj.driver?.rpm}`);
+
+  // 28. Routing: templates get interactive 3D, 2d gets diagrams,
+  // everything else is explicitly illustrative.
+  const repOf = (medium: string, template?: string) =>
+    representationOf({ concept: { question: "q", medium: medium as never, mediumWhy: "x", verification: "sketch", template }, theme: { motif: "m", palette: "okabe-ito", keyAzimuth: 0 }, nodes: [], joints: [], groups: [], edges: [], flows: [], camera: { axisOfAction: [0,1,0], shots: [] }, beats: [], audio: { layers: [] } });
+  check("route-template", repOf("3d", "crank-slider") === "template-3d");
+  check("route-2d", repOf("2d") === "diagram-2d");
+  check("route-illustrative", repOf("3d") === "illustrative-3d" && repOf("hybrid") === "illustrative-2d");
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

@@ -10,7 +10,8 @@ import * as THREE from 'three'
 import type { DslNode } from '../types'
 import { estimateExtents } from '../api/layout'
 
-function shade(tint: string, k: number): string {
+/** Darken/lighten a hex tint. Shared with archetypes. */
+export function shade(tint: string, k: number): string {
   const m = /^#([0-9a-fA-F]{6})$/.exec(tint)
   if (!m) return tint
   const v = (i: number): string =>

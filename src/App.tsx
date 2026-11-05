@@ -317,6 +317,9 @@ export default function App() {
   const [railTab, setRailTab] = useState<'spine' | 'read' | 'repair'>('spine')
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState(1)
+  // 3D is opt-in exploration for everything except code-owned
+  // templates: the diagram teaches, the schematic illustrates.
+  const [explore3D, setExplore3D] = useState(false)
   const [history, setHistory] = useState<Array<{ query: string; ts: number; scene: SceneData }>>(() => {
     try {
       const raw = localStorage.getItem('grasp-history')
@@ -346,6 +349,10 @@ export default function App() {
   } = state
 
   const beats: Beat[] = sceneData?.beats?.length ? sceneData.beats : []
+  // New world, fresh view: exploration never carries over.
+  React.useEffect(() => {
+    setExplore3D(false)
+  }, [concept?.id])
   const beat = beats[currentBeat - 1] || beats[0]
 
   const lastBeatId = beats.length
@@ -656,31 +663,7 @@ export default function App() {
 
                 <div className="relative w-full flex-1 min-h-[50vh] craft-panel overflow-hidden">
                   <div className="absolute inset-0 border-2 border-white/40 pointer-events-none" />
-                  {medium === '2d' ? (
-                    <Scene2D
-                      nodes={(sceneData?.dsl?.nodes ?? []).map((n) => ({
-                        id: n.id,
-                        label: n.label,
-                        sub: beats.find((b) => b.part === n.label)?.goal,
-                      }))}
-                      edges={
-                        sceneData?.dsl?.edges && sceneData.dsl.edges.length > 0
-                          ? sceneData.dsl.edges
-                          : beats.slice(0, -1).map((b, i) => ({
-                              from: dslNodes.find((n) => n.label === b.part)?.id ?? '',
-                              to: dslNodes.find((n) => n.label === beats[i + 1]?.part)?.id ?? '',
-                              rel: 'next in lesson',
-                            })).filter((e) => e.from && e.to)
-                      }
-                      sequential={!sceneData?.dsl?.edges || sceneData.dsl.edges.length === 0}
-                      activeNodeId={activeNodeIds[0] ?? null}
-                      faultNodeId={shownFaultNodeIds[0] ?? null}
-                      onSelect={(nodeId) => {
-                        const idx = dslBeats?.findIndex((b) => b.becauseOf.includes(nodeId)) ?? -1
-                        if (idx >= 0) dispatch({ type: 'SET_BEAT', payload: idx + 1 })
-                      }}
-                    />
-                  ) : (
+                  {representation === 'template-3d' ? (
                     <Scene3D
                       beats={beats}
                       currentBeat={currentBeat}
@@ -703,6 +686,80 @@ export default function App() {
                       focusNodeIds={[...activeNodeIds, ...shownFaultNodeIds]}
                       sceneKey={concept?.id ?? 'scene'}
                     />
+                  ) : (
+                    <>
+                      <div className="absolute top-3 left-3 z-20 flex gap-2">
+                        <button
+                          role="tab"
+                          aria-selected={!explore3D}
+                          onClick={() => setExplore3D(false)}
+                          className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border-2 transition-all ${!explore3D ? 'bg-2c2418 text-f3efe1 border-2c2418' : 'bg-white text-slate border-c9ba9e hover:border-b8860b'}`}
+                        >
+                          Diagram
+                        </button>
+                        <button
+                          role="tab"
+                          aria-selected={explore3D}
+                          onClick={() => setExplore3D(true)}
+                          className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border-2 transition-all ${explore3D ? 'bg-2c2418 text-f3efe1 border-2c2418' : 'bg-white text-slate border-c9ba9e hover:border-b8860b'}`}
+                        >
+                          3D explore
+                        </button>
+                      </div>
+                      {!explore3D ? (
+                        <Scene2D
+                          nodes={(sceneData?.dsl?.nodes ?? []).map((n) => ({
+                            id: n.id,
+                            label: n.label,
+                            sub: beats.find((b) => b.part === n.label)?.goal,
+                          }))}
+                          edges={
+                            sceneData?.dsl?.edges && sceneData.dsl.edges.length > 0
+                              ? sceneData.dsl.edges
+                              : beats.slice(0, -1).map((b, i) => ({
+                                  from: dslNodes.find((n) => n.label === b.part)?.id ?? '',
+                                  to: dslNodes.find((n) => n.label === beats[i + 1]?.part)?.id ?? '',
+                                  rel: 'next in lesson',
+                                })).filter((e) => e.from && e.to)
+                          }
+                          sequential={!sceneData?.dsl?.edges || sceneData.dsl.edges.length === 0}
+                          activeNodeId={activeNodeIds[0] ?? null}
+                          faultNodeId={shownFaultNodeIds[0] ?? null}
+                          onSelect={(nodeId) => {
+                            const idx = dslBeats?.findIndex((b) => b.becauseOf.includes(nodeId)) ?? -1
+                            if (idx >= 0) dispatch({ type: 'SET_BEAT', payload: idx + 1 })
+                          }}
+                        />
+                      ) : (
+                        <>
+                          <div className="absolute top-3 right-3 z-20 px-3 py-1.5 bg-f3efe1 border-2 border-c9ba9e text-[10px] font-bold text-slate uppercase tracking-widest">
+                            Illustrative schematic — not to scale, motion shows sequence not physics
+                          </div>
+                          <Scene3D
+                            beats={beats}
+                            currentBeat={currentBeat}
+                            sabotageBeatIndex={sabotageBeatIndex}
+                            sabotageMode={sabotageMode}
+                            nodes={dslNodes}
+                            activeNodeIds={activeNodeIds}
+                            faultNodeIds={shownFaultNodeIds}
+                            hiddenNodeIds={shownHiddenNodeIds}
+                            joints={dslJoints}
+                            groups={sceneData?.dsl?.groups ?? []}
+                            edges={sceneData?.dsl?.edges ?? []}
+                            templateParams={undefined}
+                            templateKind={undefined}
+                            speed={speed}
+                            time={beatTime}
+                            playing={playing}
+                            medium={medium}
+                            backdrop={sceneData?.dsl?.theme?.backdrop}
+                            focusNodeIds={[...activeNodeIds, ...shownFaultNodeIds]}
+                            sceneKey={concept?.id ?? 'scene'}
+                          />
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               </>

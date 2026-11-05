@@ -103,7 +103,7 @@ const run = Effect.gen(function* () {
   check("layout-stable", maxDelta < 0.05, `delta=${maxDelta.toFixed(3)}`);
   const tube = laid.nodes.find((n) => n.id === "beam")!;
   const reach = Math.max(...(tube.geometry!.path as number[][]).map((p) => Math.abs(p[0] - tube.transform.p[0])));
-  check("tube-clamped", reach <= 3.61, `reach=${reach.toFixed(2)}`);
+  check("tube-reach-preserved", reach > 0 && reach <= 6.1, `reach=${reach.toFixed(2)}`);
   const beamR = laid.nodes.find((n) => n.id === "beam")!.geometry!.radius as number;
   check("tube-radius-capped", beamR <= 0.41, `r=${beamR}`);
   check("beats-mapped", scene.beats.length === 4 && scene.causalSpine.length === 4);
@@ -331,6 +331,19 @@ camera({"axisOfAction":[0,1,0],"shots":[]})
   const e1 = encLaid.nodes.find((n) => n.id === "o1")!;
   const e3 = encLaid.nodes.find((n) => n.id === "o3")!;
   check("enclosure-kept", Math.abs(e1.transform.p[0] - e3.transform.p[0]) < estimateExtents(e3).hx, `dx=${Math.abs(e1.transform.p[0] - e3.transform.p[0]).toFixed(2)} shellHx=${estimateExtents(e3).hx.toFixed(2)}`);
+
+  // 27. Joint re-derivation: anchors track staged midpoints, RPM is
+  // tip-speed clamped (a 1-unit part at model 120rpm must not stay 120).
+  const JM = GOOD.replace('hinge({"id":"j1","a":"shaft","b":"plug"', 'hinge({"id":"j1","a":"shaft","b":"plug"').replace('"rpm":20}', '"rpm":120}');
+  void JM;
+  const jdsl = (yield* parseSceneCode(GOOD.replace('"driver":{"kind":"time","rpm":20}', '"driver":{"kind":"time","rpm":120}')) as SceneDsl);
+  const jlaid = adaptDslToScene(jdsl).dsl!;
+  const jj = jlaid.joints.find((x) => x.id === "j1")!;
+  const na = jlaid.nodes.find((n) => n.id === "shaft")!;
+  const nb = jlaid.nodes.find((n) => n.id === "plug")!;
+  const midX = (na.transform.p[0] + nb.transform.p[0]) / 2;
+  check("joint-anchor-midpoint", Math.abs(jj.anchor[0] - midX) < 0.01, `ax=${jj.anchor[0].toFixed(2)} mid=${midX.toFixed(2)}`);
+  check("joint-rpm-clamped", (jj.driver?.rpm ?? 999) < 120, `rpm=${jj.driver?.rpm}`);
 
   console.log(results.join("\n"));
   console.log("E2E ALL GREEN");

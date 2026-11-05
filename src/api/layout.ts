@@ -7,7 +7,7 @@
 // the stage (bottom at y=0), backdrops pushed behind, effects kept near
 // their beat. Tight composition is guaranteed structurally, not by luck.
 
-import type { DslNode, SceneDsl, Vec3 } from "../types";
+import type { DslJoint, DslNode, SceneDsl, Vec3 } from "../types";
 
 function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? Math.abs(v) : 0;
@@ -109,6 +109,46 @@ function isBackdropNode(n: DslNode): boolean {
   return false;
 }
 
+/** Joint re-derivation. Model-authored anchors point at pre-layout
+ * positions that no longer exist after staging, and model RPM values
+ * are arbitrary (a 4-unit wheel at 60rpm is a blur, not a mechanism).
+ * Anchors become midpoints of the staged pair, axes fall back to the
+ * face-on default when degenerate, and RPM clamps to tip speed:
+ * small parts may spin fast, big parts turn slowly. Ranges stay
+ * model-authored: swing span is lesson content, not taste. */
+function deriveJoints(
+  nodes: DslNode[],
+  joints: DslJoint[]
+): DslJoint[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  return joints.map((j) => {
+    const a = byId.get(j.a);
+    const b = byId.get(j.b);
+    if (!a || !b) return j;
+    const mid: Vec3 = [
+      (a.transform.p[0] + b.transform.p[0]) / 2,
+      (a.transform.p[1] + b.transform.p[1]) / 2,
+      (a.transform.p[2] + b.transform.p[2]) / 2,
+    ];
+    const ax = Array.isArray(j.axis) ? j.axis : [0, 0, 1];
+    const len = Math.hypot(ax[0], ax[1], ax[2]);
+    const axis: Vec3 = len > 0.01 ? [ax[0] / len, ax[1] / len, ax[2] / len] : [0, 0, 1];
+    const eb = estimateExtents(b);
+    const r = Math.max(eb.hx, eb.hy, eb.hz, 0.2);
+    const modelRpm =
+      typeof j.driver?.rpm === "number" && Number.isFinite(j.driver.rpm)
+        ? Math.abs(j.driver.rpm)
+        : 20;
+    const rpm = Math.max(3, Math.min(modelRpm, Math.max(6, Math.round(20 / r))));
+    return {
+      ...j,
+      anchor: mid,
+      axis,
+      driver: { ...(j.driver ?? {}), kind: "time", rpm } as DslJoint["driver"],
+    };
+  });
+}
+
 /**
  * Assembled staging. The authored scene is a mechanism, not a parts
  * list: relative positions, sizes, and rotations are preserved exactly.
@@ -157,7 +197,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
   const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 0.001);
   // Fit the assembly to a 9-unit stage; never explode tiny scenes
   // beyond 3x. The low floor matters: authored spreads can reach
-  // ~120 units (parser clamps at ±60), and 9/120 is 0.075.
+  // (validator clamps inputs, so these bounds are defensive, not load-bearing).
   const k = Math.max(0.05, Math.min(3, 9 / span));
   const tx = (p: [number, number, number]): Vec3 => [
     (p[0] - cx) * k,
@@ -212,12 +252,40 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
     const [x, y, z] = n.transform.p;
     return { x, y, z, hx: e.hx, hy: e.hy, hz: e.hz };
   };
+  // Children follow their placed parents: authored relative offsets,
+  // scaled by the scene factor k, are re-applied after staging so
+  // assemblies keep internal layout. De-penetration runs first on
+  // parentless solids only, so pushes never detach a child; then
+  // children reattach to moved parents.
+  const authored = new Map(dsl.nodes.map((n) => [n.id, n]));
+  const followChildren = (): void => {
+    const placed = new Map(nodes.map((n) => [n.id, n]));
+    for (const n of nodes) {
+      if (!n.parent) continue;
+      const pp = placed.get(n.parent);
+      const ap = authored.get(n.parent);
+      const an = authored.get(n.id);
+      if (!pp || !ap || !an) continue;
+      n.transform = {
+        ...n.transform,
+        p: [
+          pp.transform.p[0] + (an.transform.p[0] - ap.transform.p[0]) * k,
+          pp.transform.p[1] + (an.transform.p[1] - ap.transform.p[1]) * k,
+          pp.transform.p[2] + (an.transform.p[2] - ap.transform.p[2]) * k,
+        ] as Vec3,
+      };
+    }
+  };
+  // Parented parts never take part in pushing: they inherit their
+  // parent's placement below, so moving them here would only detach
+  // them before reattachment.
+  const movers = solids.filter((n) => !n.parent);
   for (let iter = 0; iter < 60; iter++) {
     let moved = false;
-    for (let i = 0; i < solids.length; i++) {
-      for (let j = i + 1; j < solids.length; j++) {
-        const a = boxOf(solids[i]);
-        const b = boxOf(solids[j]);
+    for (let i = 0; i < movers.length; i++) {
+      for (let j = i + 1; j < movers.length; j++) {
+        const a = boxOf(movers[i]);
+        const b = boxOf(movers[j]);
         if (Math.abs(a.y - b.y) >= a.hy + b.hy) continue; // stacked, not colliding
         // Enclosure is not collision: a cabinet, dome, or tub fully
         // containing another part in plan view is doing its job.
@@ -233,18 +301,19 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
         moved = true;
         if (penX <= penZ) {
           const push = (penX / 2 + 0.02) * (dx >= 0 ? 1 : -1);
-          solids[i].transform = { ...solids[i].transform, p: [a.x - push, a.y, a.z] as unknown as Vec3 };
-          solids[j].transform = { ...solids[j].transform, p: [b.x + push, b.y, b.z] as unknown as Vec3 };
+          movers[i].transform = { ...movers[i].transform, p: [a.x - push, a.y, a.z] as unknown as Vec3 };
+          movers[j].transform = { ...movers[j].transform, p: [b.x + push, b.y, b.z] as unknown as Vec3 };
         } else {
           const push = (penZ / 2 + 0.02) * (dz >= 0 ? 1 : -1);
-          solids[i].transform = { ...solids[i].transform, p: [a.x, a.y, a.z - push] as unknown as Vec3 };
-          solids[j].transform = { ...solids[j].transform, p: [b.x, b.y, b.z + push] as unknown as Vec3 };
+          movers[i].transform = { ...movers[i].transform, p: [a.x, a.y, a.z - push] as unknown as Vec3 };
+          movers[j].transform = { ...movers[j].transform, p: [b.x, b.y, b.z + push] as unknown as Vec3 };
         }
       }
     }
     if (!moved) break;
   }
   // Re-center in plan after relaxation so pushes cannot drift the scene.
+  // Uniform shift: relative assembly offsets survive it.
   if (solids.length > 0) {
     let lo = Infinity, hi = -Infinity, loZ = Infinity, hiZ = -Infinity;
     for (const n of solids) {
@@ -261,5 +330,7 @@ export function layoutScene(dsl: SceneDsl): SceneDsl {
       };
     }
   }
-  return { ...dsl, nodes };
+  followChildren();
+  const joints = deriveJoints(nodes, dsl.joints);
+  return { ...dsl, nodes, joints };
 }

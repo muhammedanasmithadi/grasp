@@ -25,7 +25,7 @@ const LABEL_STYLE: React.CSSProperties = {
 import { getGrainTexture, getMapTexture, getLinearTexture, getStageTexture } from './procedural'
 import { estimateExtents } from '../api/layout'
 import { DetailFor } from './details'
-import { substanceUrl, normalForAlbedo } from '../api/substance'
+import { substanceUrl, normalForAlbedo, substanceStyle } from '../api/substance'
 import { crankSliderPose, pendulumAngle } from '../api/kinematics'
 import type { DslEdge } from '../types'
 
@@ -643,11 +643,21 @@ function faceSizeOf(node: DslNode): number {
       255
     return lum > 0.85
   })()
+  // Code-owned matter: a named substance gets its canonical finish.
+  // The model's tint survives only for unnamed parts. Functional
+  // fields (transmission, emissive, opacity) always stay model-owned.
+  const style = substanceStyle(node.label, node.id, node.type)
+  const authoredTint = node.material.tint || color
+  const authoredRough = node.material.roughness ?? 0.5
+  const authoredMetal = node.material.metalness ?? 0.6
+  const partTint = style?.tint ?? authoredTint
+  const partRough = style?.roughness ?? authoredRough
+  const partMetal = style?.metalness ?? authoredMetal
   const base = isFault
     ? '#D55E00'
     : liftBlackTint(
         brightFaceTint(
-          groundSafeTint(node.material.tint || color, bigBright),
+          groundSafeTint(partTint, bigBright),
           faceSizeOf(node)
         )
       )
@@ -703,8 +713,8 @@ function faceSizeOf(node: DslNode): number {
             color={base}
             map={mapTex}
             normalMap={normalTex}
-            roughness={node.material.roughness ?? 0.5}
-            metalness={node.material.metalness ?? 0.6}
+            roughness={partRough}
+            metalness={partMetal}
             roughnessMap={getGrainTexture()}
             bumpMap={getGrainTexture()}
             bumpScale={0.02}
@@ -726,8 +736,8 @@ function faceSizeOf(node: DslNode): number {
           color={base}
           map={mapTex}
           normalMap={normalTex}
-          roughness={node.material.roughness ?? 0.5}
-          metalness={node.material.metalness ?? 0.6}
+          roughness={partRough}
+          metalness={partMetal}
           roughnessMap={getGrainTexture()}
           bumpMap={getGrainTexture()}
           bumpScale={0.02}

@@ -708,26 +708,31 @@ export default function App() {
                       </div>
                       {!explore3D ? (
                         <Scene2D
-                          nodes={(sceneData?.dsl?.nodes ?? []).map((n) => ({
-                            id: n.id,
-                            label: n.label,
-                            sub: beats.find((b) => b.part === n.label)?.goal,
+                          nodes={beats.map((b, i) => ({
+                            id: `beat-${i}`,
+                            label: b.part,
+                            sub: b.goal,
                           }))}
-                          edges={
-                            sceneData?.dsl?.edges && sceneData.dsl.edges.length > 0
-                              ? sceneData.dsl.edges
-                              : beats.slice(0, -1).map((b, i) => ({
-                                  from: dslNodes.find((n) => n.label === b.part)?.id ?? '',
-                                  to: dslNodes.find((n) => n.label === beats[i + 1]?.part)?.id ?? '',
-                                  rel: 'next in lesson',
-                                })).filter((e) => e.from && e.to)
-                          }
+                          edges={(() => {
+                            const beatOf = (nodeId: string): number =>
+                              dslBeats?.findIndex((b) => b.becauseOf.includes(nodeId)) ?? -1
+                            const explicit = (sceneData?.dsl?.edges ?? [])
+                              .map((e) => ({ from: beatOf(e.from), to: beatOf(e.to), rel: e.rel }))
+                              .filter((e) => e.from >= 0 && e.to >= 0 && e.from !== e.to)
+                              .map((e) => ({ from: `beat-${e.from}`, to: `beat-${e.to}`, rel: e.rel }))
+                            if (explicit.length > 0) return explicit
+                            return beats.slice(0, -1).map((_, i) => ({
+                              from: `beat-${i}`,
+                              to: `beat-${i + 1}`,
+                              rel: 'next in lesson',
+                            }))
+                          })()}
                           sequential={!sceneData?.dsl?.edges || sceneData.dsl.edges.length === 0}
-                          activeNodeId={activeNodeIds[0] ?? null}
-                          faultNodeId={shownFaultNodeIds[0] ?? null}
+                          activeNodeId={`beat-${currentBeat - 1}`}
+                          faultNodeId={onDrillBeat && faultNodeIds.length > 0 ? `beat-${currentBeat - 1}` : null}
                           onSelect={(nodeId) => {
-                            const idx = dslBeats?.findIndex((b) => b.becauseOf.includes(nodeId)) ?? -1
-                            if (idx >= 0) dispatch({ type: 'SET_BEAT', payload: idx + 1 })
+                            const m = /^beat-(\d+)$/.exec(nodeId)
+                            if (m) dispatch({ type: 'SET_BEAT', payload: Number(m[1]) + 1 })
                           }}
                         />
                       ) : (
